@@ -1,0 +1,5 @@
+/logs
+/fine_tuned_gpt2
+/results
+*.mod1
+*.gb
