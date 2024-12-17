@@ -1,5 +1,5 @@
 /logs
-/fine_tuned_gpt2
+/spliceGPT
 /results
 *.mod1
 *.gb
