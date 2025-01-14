@@ -3,3 +3,6 @@
 /results
 *.mod1
 *.gb
+playground.ipynb
+/playground
+*.csv
