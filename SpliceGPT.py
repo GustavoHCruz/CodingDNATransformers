@@ -1,3 +1,4 @@
+import json
 import random
 
 import numpy as np
@@ -18,29 +19,43 @@ if in_notebook:
 else:
 	from tqdm import tqdm
 
-
 class SpliceGPTDataset(Dataset):
-	def __init__(self, sequences, labels, tokenizer, max_length):
-		self.sequences = sequences
-		self.labels = labels
+	def __init__(self, data, tokenizer, sequence_len, flanks_len, feat_hide_prob):
+		self.data = data
 		self.tokenizer = tokenizer
-		self.max_length = max_length
+		self.max_length = sequence_len + flanks_len + 120
+		self.feat_hide_prob = feat_hide_prob
 
 	def __len__(self):
-		return len(self.sequences)
+		return len(self.data["sequence"])
 	
 	def __getitem__(self, idx):
-		prompt = self.sequences[idx]
-		label = self.labels[idx]
+		input_text = f"Sequence: {self.data['sequence'][idx]}\n"
 
-		input_text = f"sequence: {prompt}\nanswer: "
-		output_text = f"{label}"
+		if len(self.data["organism"]) > idx and self.data["organism"][idx]:
+			if random.random() > self.feat_hide_prob:
+				input_text += f"Organism: {self.data["organism"][idx]}\n"
+		
+		if len(self.data["gene"]) > idx and self.data["gene"][idx]:
+			if random.random() > self.feat_hide_prob:
+				input_text += f"Gene: {self.data["gene"][idx]}\n"
+
+		if len(self.data["flank_before"]) > idx and self.data["flank_before"][idx]:
+			if random.random() > self.feat_hide_prob:
+				input_text += f"Flank Before: {self.data["flank_before"][idx]}\n"
+
+		if len(self.data["flank_after"]) > idx and self.data["flank_after"][idx]:
+			if random.random() > self.feat_hide_prob:
+				input_text += f"Flank After: {self.data["flank_after"][idx]}\n"
+		
+		input_text += "Answer: "
+		output_text = f"{self.data["label"][idx]}"
 
 		input_ids = self.tokenizer.encode(input_text, truncation=True, max_length=self.max_length, add_special_tokens=True, padding=True)
 		label_ids = self.tokenizer.encode(output_text, truncation=True, max_length=self.max_length, add_special_tokens=False)
 
-		input_ids += label_ids
-		labels = [-100] * len(input_ids[:-len(label_ids)]) + label_ids
+		labels = [-100] * len(input_ids)
+		labels[-len(label_ids):] = label_ids
 
 		return torch.tensor(input_ids), torch.tensor(labels)
 
@@ -69,6 +84,7 @@ class SpliceGPT():
 			notification (bool): If enabled, sends a GUI notification when training or evaluation concludes.
 		"""
 		self._device = device
+		self._additional_info_filename = "additional_info"
 		self.model = GPT2LMHeadModel.from_pretrained(checkpoint)
 		self.tokenizer = GPT2Tokenizer.from_pretrained(checkpoint, padding_side="left")
 
@@ -90,6 +106,9 @@ class SpliceGPT():
 		self.model = GPT2LMHeadModel.from_pretrained(checkpoint)
 		self.tokenizer = GPT2Tokenizer.from_pretrained(checkpoint, padding_side="left")
 
+		with open(f"{checkpoint}/{self._additional_info_filename}.json", "r") as f:
+			self._last_train_info = json.load(f)
+
 	def _collate_fn(self, batch):
 		input_ids, labels = zip(*batch)
 		input_ids_padded = torch.nn.utils.rnn.pad_sequence(input_ids, batch_first=True, padding_value=self.tokenizer.pad_token_id)
@@ -102,32 +121,81 @@ class SpliceGPT():
 	
 	def _process_label(self, label):
 		return f"[{label.upper()}]"
+	
+	def _process_data(self, data):
+		data["sequence"] = [self._process_sequence(sequence) for sequence in data["sequence"]]
+		data["label"] = [self._process_label(label) for label in data["label"]]
+		data["flank_before"] = [self._process_sequence(sequence) for sequence in data["flank_before"]]
+		data["flank_after"] = [self._process_sequence(sequence) for sequence in data["flank_after"]]
 
-	def create_dataloaders(self, sequences, labels, max_length=256, batch_size=32, split_percentage=0.8):
-		processed_sequences = [self._process_sequence(sequence) for sequence in sequences]
-		processed_labels = [self._process_label(label) for label in labels]
+		return data
 
-		dataset = SpliceGPTDataset(processed_sequences, processed_labels, self.tokenizer, max_length=max_length)
+	def add_data(self, data, sequence_len=512, flanks_len=10, batch_size=32, train_percentage=0.8, feat_hide_prob=0.01):
+		if sequence_len > 512:
+			raise ValueError("cannot support sequences_len higher than 512")
+		if flanks_len > 50:
+			raise ValueError("cannot support flanks_len higher than 50")
 
-		total_size = len(dataset)
-		train_size = int(total_size * split_percentage)
-		test_size = total_size - train_size
+		self._data_configuration = {
+			"sequence_len": sequence_len,
+			"flanks_len": flanks_len,
+			"batch_size": batch_size,
+			"feat_hide_prob": feat_hide_prob
+		}
 		
-		self.train_dataset, self.test_dataset = random_split(dataset, [train_size, test_size])
+		data = self._process_data(data)
 
+		dataset = SpliceGPTDataset(data, self.tokenizer, sequence_len=sequence_len, flanks_len=flanks_len, feat_hide_prob=feat_hide_prob)
+
+		if train_percentage == 1.0:
+			self.train_dataset = dataset
+		else:
+			if hasattr(self, "_last_train_info"):
+				if self._last_train_info["sequence_len"] != sequence_len or \
+				self._last_train_info["flanks_len"] != flanks_len or \
+				self._last_train_info["batch_size"] != batch_size or \
+				self._last_train_info["feat_hide_prob"] != feat_hide_prob:
+					print("Detected a different test dataloader configuration than the one used during training. This may lead to suboptimal results.")
+			total_size = len(dataset)
+			train_size = int(total_size * train_percentage)
+			test_size = total_size - train_size
+			self.train_dataset, self.test_dataset = random_split(dataset, [train_size, test_size])
+			self.test_dataloader = DataLoader(self.test_dataset, batch_size=batch_size, shuffle=True, collate_fn=self._collate_fn)
+		
 		self.train_dataloader = DataLoader(self.train_dataset, batch_size=batch_size, shuffle=True, collate_fn=self._collate_fn)
+
+	def add_test_data(self, data, sequence_len=512, flanks_len=10, batch_size=32, feat_hide_prob=0.01):
+		if hasattr(self, "_last_train_info"):
+			if self._last_train_info["sequence_len"] != sequence_len or \
+			self._last_train_info["flanks_len"] != flanks_len or \
+			self._last_train_info["batch_size"] != batch_size or \
+			self._last_train_info["feat_hide_prob"] != feat_hide_prob:
+				print("Detected a different test dataloader configuration than the one used during training. This may lead to suboptimal results.")
+
+		data = self._process_data(data)
+
+		self.test_dataset = SpliceGPTDataset(data, self.tokenizer, sequence_len=sequence_len, flanks_len=flanks_len, feat_hide_prob=feat_hide_prob)
 		self.test_dataloader = DataLoader(self.test_dataset, batch_size=batch_size, shuffle=True, collate_fn=self._collate_fn)
 
-	def free_data(self):
-		self.train_dataset = None
-		self.train_dataloader = None
-		self.test_dataset = None
-		self.test_dataloader = None
+	def free_data(self, train=True, test=True):
+		if train:
+			self.train_dataset = None
+			self.train_dataloader = None
 
-	def train(self, lr=0.0005, epochs=3):
+		if test:	
+			self.test_dataset = None
+			self.test_dataloader = None
+
+	def train(self, lr=0.0005, epochs=3, save_at_end=None):
 		if not hasattr(self, "train_dataloader"):
 			raise ValueError("Can't find the train dataloader, make sure you initialized it.")
 		
+		self._last_train_info = self._data_configuration.copy()
+		self._last_train_info.update({
+			"lr": lr,
+			"epochs": epochs,
+		})
+
 		self.model.to(self._device)
 		optimizer = AdamW(self.model.parameters(), lr=lr)
 
@@ -154,6 +222,9 @@ class SpliceGPT():
 			notification.notify(title="Training complete", timeout=5)
 
 		torch.cuda.empty_cache()
+
+		if save_at_end:
+			self.save_checkpoint(save_at_end)
 	
 	def evaluate(self):
 		if not hasattr(self, "test_dataloader"):
@@ -235,12 +306,11 @@ class SpliceGPT():
 				),
 				timeout=5
 			)
-
 	
 	def predict(self, sequence, repetition_penalty=2.0):
 		self._process_sequence(sequence)
 		self.model.eval()
-		input_text = f"sequence: {sequence}\nanswer: "
+		input_text = f"Sequence: {sequence}.\nAnswer: "
 		input_ids = self.tokenizer.encode(input_text, return_tensors="pt").to(self._device)
 
 		with torch.no_grad():
@@ -252,10 +322,18 @@ class SpliceGPT():
 				pad_token_id=self.tokenizer.eos_token_id,
 			)
 
-		generated_token_ids = outputs[0, input_ids.size(-1)]
+		generated_token_ids = outputs[0]
 		new_token = self.tokenizer.decode(generated_token_ids, skip_special_tokens=True).strip()
 		return new_token
 		
 	def save_checkpoint(self, checkpoint):
+		if not hasattr(self, "_last_train_info"):
+			raise ValueError("Nothing to save")
+		
 		self.model.save_pretrained(checkpoint)
 		self.tokenizer.save_pretrained(checkpoint)
+
+		with open(f"{checkpoint}/{self._additional_info_filename}.json", "w") as f:
+			json.dump(self._last_train_info, f, indent=2)
+		
+		print(f"Model & Infos Successful Saved at {checkpoint}")
