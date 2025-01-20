@@ -85,8 +85,12 @@ class SpliceGPT():
 		"""
 		self._device = device
 		self._additional_info_filename = "additional_info"
-		self.model = GPT2LMHeadModel.from_pretrained(checkpoint)
-		self.tokenizer = GPT2Tokenizer.from_pretrained(checkpoint, padding_side="left")
+
+		if (checkpoint != "gpt2"):
+			self.load_checkpoint(checkpoint)
+		else:
+			self.model = GPT2LMHeadModel.from_pretrained(checkpoint)
+			self.tokenizer = GPT2Tokenizer.from_pretrained(checkpoint, padding_side="left")
 
 		if seed is not None:
 			self._set_seed(seed)
@@ -98,7 +102,7 @@ class SpliceGPT():
 		if checkpoint == "gpt2":
 			self.tokenizer.pad_token = self.tokenizer.eos_token
 
-			special_tokens = ["[A]", "[C]", "[G]", "[T]", "[EXON]", "[INTRON]"]
+			special_tokens = ["[A]", "[C]", "[G]", "[T]", ["R"], ["Y"], ["S"], ["W"], ["K"], ["M"], ["B"], ["D"], ["H"], ["V"], ["N"], "[EXON]", "[INTRON]"]
 			self.tokenizer.add_tokens(special_tokens)
 			self.model.resize_token_embeddings(len(self.tokenizer), mean_resizing=False)
 	
@@ -307,15 +311,25 @@ class SpliceGPT():
 				timeout=5
 			)
 	
-	def predict(self, sequence, repetition_penalty=2.0):
-		self._process_sequence(sequence)
-		self.model.eval()
-		input_text = f"Sequence: {sequence}.\nAnswer: "
+	def _prediction_token_mapping(token):
+		return token.replace("[", "").replace("]", "").lower()
+
+	def predict_single(self, data, repetition_penalty=2.0, map_pred=True):
+		sequence = self._process_sequence(data["sequence"])
+		
+		keys = ["gene", "organism", "flank_before", "flank_after"]
+		input_text = f"Sequence: {sequence}\n"
+		for key in keys:
+			if hasattr(data, key):
+				input_text += f"{key.capitalize()}: {data[key]}\n"
+		input_text += "Answer: "
+
 		input_ids = self.tokenizer.encode(input_text, return_tensors="pt").to(self._device)
 
+		self.model.eval()
 		with torch.no_grad():
 			outputs = self.model.generate(
-				input_ids,
+				input_ids=input_ids,
 				attention_mask=torch.tensor([1]*input_ids.size(-1)).unsqueeze(0).to(self._device),
 				max_new_tokens=1,
 				repetition_penalty=repetition_penalty,
@@ -323,8 +337,18 @@ class SpliceGPT():
 			)
 
 		generated_token_ids = outputs[0]
-		new_token = self.tokenizer.decode(generated_token_ids, skip_special_tokens=True).strip()
+		new_token = self.tokenizer.decode(generated_token_ids[input_ids.size(-1)], skip_special_tokens=True).strip()
+
+		if map_pred:
+			return self._prediction_token_mapping(new_token)
+		
 		return new_token
+	
+	def predict_batch(self, data_batch, repetition_penalty=2.0, map_pred=True):
+		preds = []
+		for data in data_batch:
+			pred = self.predict_single(data, repetition_penalty, map_pred)
+			preds.append(pred)
 		
 	def save_checkpoint(self, checkpoint):
 		if not hasattr(self, "_last_train_info"):
