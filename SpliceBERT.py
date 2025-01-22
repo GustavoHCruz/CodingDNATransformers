@@ -6,7 +6,7 @@ import torch
 from plyer import notification
 from torch.optim import AdamW
 from torch.utils.data import DataLoader, Dataset, random_split
-from transformers import GPT2LMHeadModel, GPT2Tokenizer
+from transformers import BertForSequenceClassification, BertTokenizer
 
 try:
 	from IPython import get_ipython
@@ -19,47 +19,43 @@ if in_notebook:
 else:
 	from tqdm import tqdm
 
-class SpliceGPTDataset(Dataset):
+class SpliceBERTDataset(Dataset):
 	def __init__(self, data, tokenizer, sequence_len, flanks_len, feat_hide_prob):
 		self.data = data
 		self.tokenizer = tokenizer
-		self.max_length = sequence_len + flanks_len * 2 + 120
+		self.max_length = sequence_len + flanks_len * 2 + 100
 		self.feat_hide_prob = feat_hide_prob
 
 	def __len__(self):
 		return len(self.data["sequence"])
 	
 	def __getitem__(self, idx):
-		input_text = f"Sequence: {self.data['sequence'][idx]}\n"
+		prompt = f"Sequence:{self.data['sequence'][idx]}[SEP]"
 
 		if len(self.data["organism"]) > idx and self.data["organism"][idx]:
 			if random.random() > self.feat_hide_prob:
-				input_text += f"Organism: {self.data["organism"][idx]}\n"
+				prompt += f"Organism:{self.data["organism"][idx][:20]}[SEP]"
 		
 		if len(self.data["gene"]) > idx and self.data["gene"][idx]:
 			if random.random() > self.feat_hide_prob:
-				input_text += f"Gene: {self.data["gene"][idx]}\n"
+				prompt += f"Gene:{self.data["gene"][idx][:20]}[SEP]"
 
 		if len(self.data["flank_before"]) > idx and self.data["flank_before"][idx]:
 			if random.random() > self.feat_hide_prob:
-				input_text += f"Flank Before: {self.data["flank_before"][idx]}\n"
+				prompt += f"Flank Before:{self.data["flank_before"][idx]}[SEP]"
 
 		if len(self.data["flank_after"]) > idx and self.data["flank_after"][idx]:
 			if random.random() > self.feat_hide_prob:
-				input_text += f"Flank After: {self.data["flank_after"][idx]}\n"
+				prompt += f"Flank After:{self.data["flank_after"][idx]}[SEP]"
 		
-		input_text += "Answer: "
-		output_text = f"{self.data["label"][idx]}"
+		prompt += "Answer:"
 
-		input_ids = self.tokenizer.encode(input_text, truncation=True, max_length=self.max_length, add_special_tokens=True, padding=True)
-		label_ids = self.tokenizer.encode(output_text, truncation=True, max_length=self.max_length, add_special_tokens=False)
+		input_ids = self.tokenizer.encode(prompt, max_length=self.max_length, padding=True, truncation=True)
+		labels = self.data["label"][idx]
 
-		labels = [-100] * len(input_ids)
-		labels[-len(label_ids):] = label_ids
+		return input_ids, labels
 
-		return torch.tensor(input_ids), torch.tensor(labels)
-
-class SpliceGPT():
+class SpliceBERT():
 	def _set_seed(self, seed):
 		random.seed(seed)
 		np.random.seed(seed)
@@ -69,9 +65,9 @@ class SpliceGPT():
 		torch.backends.cudnn.deterministic = True
 		torch.backends.cudnn.benchmark = False
 
-	def __init__(self, checkpoint="gpt2", device="cuda", seed=None, notification=False):
+	def __init__(self, checkpoint="bert-base-uncased", device="cuda", seed=None, notification=False):
 		"""
-		A class to train and evaluate a GPT-based neural network for introns and exons classification.
+		A class to train and evaluate a BERT-based neural network for introns and exons classification.
 
 		This class manages preprocessing, training, evaluation, and sequence classification tasks for the model. 
 		It includes methods for training, creating dataloaders, evaluation, and prediction, and supports execution 
@@ -86,11 +82,11 @@ class SpliceGPT():
 		self._device = device
 		self._additional_info_filename = "additional_info"
 
-		if (checkpoint != "gpt2"):
+		if (checkpoint != "bert-base-uncased"):
 			self.load_checkpoint(checkpoint)
 		else:
-			self.model = GPT2LMHeadModel.from_pretrained(checkpoint)
-			self.tokenizer = GPT2Tokenizer.from_pretrained(checkpoint, padding_side="left")
+			self.model = BertForSequenceClassification.from_pretrained(checkpoint, num_labels=2)
+			self.tokenizer = BertTokenizer.from_pretrained(checkpoint, do_lower_case=False)
 
 		if seed is not None:
 			self._set_seed(seed)
@@ -99,32 +95,29 @@ class SpliceGPT():
 
 		self.model.to(self._device)
 
-		if checkpoint == "gpt2":
-			self.tokenizer.pad_token = self.tokenizer.eos_token
-
-			special_tokens = ["[A]", "[C]", "[G]", "[T]", "[R]", "[Y]", "[S]", "[W]", "[K]", "[M]", "[B]", "[D]", "[H]", "[V]", "[N]", "[EXON]", "[INTRON]"]
+		if checkpoint == "bert-base-uncased":
+			special_tokens = ["[A]", "[C]", "[G]", "[T]", "[R]", "[Y]", "[S]", "[W]", "[K]", "[M]", "[B]", "[D]", "[H]", "[V]", "[N]"]
 			self.tokenizer.add_tokens(special_tokens)
 			self.model.resize_token_embeddings(len(self.tokenizer), mean_resizing=False)
 	
 	def load_checkpoint(self, checkpoint):
-		self.model = GPT2LMHeadModel.from_pretrained(checkpoint)
-		self.tokenizer = GPT2Tokenizer.from_pretrained(checkpoint, padding_side="left")
+		self.model = BertForSequenceClassification.from_pretrained(checkpoint)
+		self.tokenizer = BertTokenizer.from_pretrained(checkpoint)
 
 		with open(f"{checkpoint}/{self._additional_info_filename}.json", "r") as f:
 			self._last_train_info = json.load(f)
-
+	
 	def _collate_fn(self, batch):
 		input_ids, labels = zip(*batch)
 		input_ids_padded = torch.nn.utils.rnn.pad_sequence(input_ids, batch_first=True, padding_value=self.tokenizer.pad_token_id)
-		labels_padded = torch.nn.utils.rnn.pad_sequence(labels, batch_first=True, padding_value=-100)
 		attention_mask = (input_ids_padded != self.tokenizer.pad_token_id).long()
-		return input_ids_padded, labels_padded, attention_mask
-	
+		return input_ids_padded, attention_mask, labels
+
 	def _process_sequence(self, sequence):
 		return f"".join(f"[{nucl.upper()}]" for nucl in sequence)
 	
 	def _process_label(self, label):
-		return f"[{label.upper()}]"
+		return 0 if label == "intron" else 1
 	
 	def _process_data(self, data):
 		data["sequence"] = [self._process_sequence(sequence) for sequence in data["sequence"]]
@@ -134,7 +127,7 @@ class SpliceGPT():
 
 		return data
 
-	def add_data(self, data, sequence_len=512, flanks_len=10, batch_size=32, train_percentage=0.8, feat_hide_prob=0.01):
+	def add_train_data(self, data, sequence_len=512, flanks_len=10, batch_size=32, train_percentage=0.8, feat_hide_prob=0.01):
 		if sequence_len > 512:
 			raise ValueError("cannot support sequences_len higher than 512")
 		if flanks_len > 50:
@@ -149,22 +142,16 @@ class SpliceGPT():
 		
 		data = self._process_data(data)
 
-		dataset = SpliceGPTDataset(data, self.tokenizer, sequence_len=sequence_len, flanks_len=flanks_len, feat_hide_prob=feat_hide_prob)
+		dataset = SpliceBERTDataset(data, self.tokenizer, sequence_len=sequence_len, flanks_len=flanks_len, feat_hide_prob=feat_hide_prob)
 
 		if train_percentage == 1.0:
 			self.train_dataset = dataset
 		else:
-			if hasattr(self, "_last_train_info"):
-				if self._last_train_info["sequence_len"] != sequence_len or \
-				self._last_train_info["flanks_len"] != flanks_len or \
-				self._last_train_info["batch_size"] != batch_size or \
-				self._last_train_info["feat_hide_prob"] != feat_hide_prob:
-					print("Detected a different test dataloader configuration than the one used during training. This may lead to suboptimal results.")
 			total_size = len(dataset)
 			train_size = int(total_size * train_percentage)
-			test_size = total_size - train_size
-			self.train_dataset, self.test_dataset = random_split(dataset, [train_size, test_size])
-			self.test_dataloader = DataLoader(self.test_dataset, batch_size=batch_size, shuffle=True, collate_fn=self._collate_fn)
+			eval_size = total_size - train_size
+			self.train_dataset, self.eval_dataset = random_split(dataset, [train_size, eval_size])
+			self.eval_dataloader = DataLoader(self.eval_dataset, batch_size=batch_size, shuffle=True, collate_fn=self._collate_fn)
 		
 		self.train_dataloader = DataLoader(self.train_dataset, batch_size=batch_size, shuffle=True, collate_fn=self._collate_fn)
 
@@ -178,13 +165,15 @@ class SpliceGPT():
 
 		data = self._process_data(data)
 
-		self.test_dataset = SpliceGPTDataset(data, self.tokenizer, sequence_len=sequence_len, flanks_len=flanks_len, feat_hide_prob=feat_hide_prob)
-		self.test_dataloader = DataLoader(self.test_dataset, batch_size=batch_size, shuffle=True, collate_fn=self._collate_fn)
+		self.test_dataset = SpliceBERTDataset(data, self.tokenizer, sequence_len=sequence_len, flanks_len=flanks_len, feat_hide_prob=feat_hide_prob)
+		self.test_dataloader = DataLoader(self.test_dataset, batch_size=batch_size, shuffle=True)
 
 	def free_data(self, train=True, test=True):
 		if train:
 			self.train_dataset = None
 			self.train_dataloader = None
+			self.eval_dataset = None
+			self.eval_dataloader = None
 
 		if test:	
 			self.test_dataset = None
@@ -195,41 +184,85 @@ class SpliceGPT():
 			raise ValueError("Can't find the train dataloader, make sure you initialized it.")
 		
 		self._last_train_info = self._data_configuration.copy()
-		self._last_train_info.update({
-			"lr": lr,
-			"epochs": epochs,
-		})
+		self._last_train_info.update({"lr": lr, "epochs": epochs})
 
 		self.model.to(self._device)
 		optimizer = AdamW(self.model.parameters(), lr=lr)
 
-		data_len = len(self.train_dataloader)
-		self.model.train()
+		history = {"train_loss": [], "eval_loss": [], "eval_accuracy": []}
+
+		best_eval_loss = float("inf")
+		best_model_path = "best_model.pth"
+
 		for epoch in range(epochs):
-			total_loss = 0
+			self.model.train()
+			train_loss = 0
 
-			epoch_bar = tqdm(total=data_len, desc=f"Epoch {epoch+1}/{epochs}", position=0, leave=True)
-
+			train_bar = tqdm(self.train_dataloader, desc=f"Training Epoch {epoch+1}/{epochs}", leave=True)
 			for batch in self.train_dataloader:
-				input_ids, labels, _ = [b.to(self._device) for b in batch]
-				outputs = self.model(input_ids=input_ids, labels=labels)
+				optimizer.zero_grad()
+
+				input_ids, attention_mask, labels = [b.to(self._device) for b in batch]
+				outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+
 				loss = outputs.loss
 				loss.backward()
 				optimizer.step()
-				optimizer.zero_grad()
-				total_loss += loss.item()
+				train_loss += loss.item()
 
-				epoch_bar.update(1)
-				epoch_bar.set_postfix(loss=total_loss/epoch_bar.n)
+				train_bar.update(1)
+				train_bar.set_postfix({"Loss": train_loss/train_bar.n})
+
+			train_bar.close()
+
+			train_loss /= len(self.train_dataloader)
+			history["train_loss"].append(train_loss)
+
+			self.model.eval()
+			eval_loss = 0
+			correct_predictions = 0
+			total_predictions = 0
+
+			eval_bar = tqdm(self.eval_dataloader, desc="Validating", leave=True)
+			with torch.no_grad():
+				for batch in self.eval_dataloader:
+					input_ids, attention_mask, labels = [b.to(self._device) for b in batch]
+					outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+
+					loss = outputs.loss
+					eval_loss += loss.item()
+
+					predictions = torch.argmax(outputs.logits, dim=-1)
+					correct_predictions += (predictions == labels).sum().item()
+					total_predictions += labels.size(0)
+
+					eval_bar.update(1)
+
+			eval_bar.close()
+
+			eval_loss /= len(self.eval_dataloader)
+			eval_accuracy = correct_predictions / total_predictions
+
+			history["eval_loss"].append(eval_loss)
+			history["eval_accuracy"].append(eval_accuracy)
+
+			print(f"Epoch {epoch+1}/{epochs}")
+			print(f"Train Loss: {train_loss:.4f}, Eval Loss: {eval_loss:.4f}, Eval Accuracy: {eval_accuracy:.4f}")
+
+			if eval_loss < best_eval_loss:
+				best_eval_loss = eval_loss
+				torch.save(self.model.state_dict(), best_model_path)
 	
 		if self.notification:
 			notification.notify(title="Training complete", timeout=5)
 
-		torch.cuda.empty_cache()
-
+		self.model.load_state_dict(torch.load(best_model_path))
+		
 		if save_at_end:
 			self.save_checkpoint(save_at_end)
-	
+
+		torch.cuda.empty_cache()
+
 	def evaluate(self):
 		if not hasattr(self, "test_dataloader"):
 			raise ValueError("Can't find the test dataloader, make sure you initialized it.")
@@ -312,42 +345,33 @@ class SpliceGPT():
 			)
 	
 	def _prediction_token_mapping(self, token):
-		return token.replace("[", "").replace("]", "").lower()
+		return "intron" if torch.argmax(token.logits, dim=-1).tolist() == [0] else "exon"
 
-	def predict_single(self, data, repetition_penalty=2.0, map_pred=True):
+	def predict_single(self, data, map_pred=True):
 		sequence = self._process_sequence(data["sequence"])
 		
 		keys = ["gene", "organism", "flank_before", "flank_after"]
-		input_text = f"Sequence: {sequence}\n"
+		prompt = f"Sequence: {sequence}\n"
 		for key in keys:
 			if hasattr(data, key):
-				input_text += f"{key.capitalize()}: {data[key]}\n"
-		input_text += "Answer: "
+				prompt += f"{key.capitalize()}: {data[key]}\n"
+		prompt += "Answer: "
 
-		input_ids = self.tokenizer.encode(input_text, return_tensors="pt").to(self._device)
+		input_ids = self.tokenizer.encode(prompt, return_tensors="pt").to(self._device)
 
 		self.model.eval()
 		with torch.no_grad():
-			outputs = self.model.generate(
-				input_ids=input_ids,
-				attention_mask=torch.tensor([1]*input_ids.size(-1)).unsqueeze(0).to(self._device),
-				max_new_tokens=1,
-				repetition_penalty=repetition_penalty,
-				pad_token_id=self.tokenizer.eos_token_id,
-			)
-
-		generated_token_ids = outputs[0]
-		new_token = self.tokenizer.decode(generated_token_ids[input_ids.size(-1)], skip_special_tokens=True).strip()
+			prediction = self.model(input_ids=input_ids)
 
 		if map_pred:
-			return self._prediction_token_mapping(new_token)
+			return self._prediction_token_mapping(prediction)
 		
-		return new_token
+		return prediction
 	
-	def predict_batch(self, data_batch, repetition_penalty=2.0, map_pred=True):
+	def predict_batch(self, data_batch, map_pred=True):
 		preds = []
 		for data in data_batch:
-			pred = self.predict_single(data, repetition_penalty, map_pred)
+			pred = self.predict_single(data, map_pred)
 			preds.append(pred)
 		
 		return preds
