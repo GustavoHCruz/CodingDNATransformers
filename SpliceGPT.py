@@ -103,16 +103,16 @@ class SpliceGPT():
 
 		self.model.to(self._device)
 
-		self.intron_token = self.tokenizer.encode("[INTRON]", add_special_tokens=False)
-		self.exon_token = self.tokenizer.encode("[EXON]", add_special_tokens=False)
-
 		if checkpoint == "gpt2":
 			self.tokenizer.pad_token = self.tokenizer.eos_token
 
 			special_tokens = ["[A]", "[C]", "[G]", "[T]", "[R]", "[Y]", "[S]", "[W]", "[K]", "[M]", "[B]", "[D]", "[H]", "[V]", "[N]", "[EXON]", "[INTRON]"]
 			self.tokenizer.add_tokens(special_tokens)
-			self.model.resize_token_embeddings(len(self.tokenizer), mean_resizing=False)
-	
+			self.model.resize_token_embeddings(len(self.tokenizer))
+
+		self.intron_token = self.tokenizer.encode("[INTRON]", add_special_tokens=False)
+		self.exon_token = self.tokenizer.encode("[EXON]", add_special_tokens=False)
+
 	def _get_next_model_dir(self):
 		os.makedirs(self.logs_dir, exist_ok=True)
 
@@ -449,36 +449,3 @@ class SpliceGPT():
 			preds.append(pred)
 		
 		return preds
-
-splicegpt = SpliceGPT(checkpoint="models/SpliceGPT", device="cuda", seed=1234, notification=True, logs_dir="logs", alias="SpliceGPT")
-
-df = pd.read_csv("datasets/ExInSeqs_3k_small.csv", keep_default_na=False)
-
-test_sequence = df.iloc[:1000, 0].tolist()
-test_label = df.iloc[:1000, 1].tolist()
-test_organism = df.iloc[:1000, 2].tolist()
-test_gene = df.iloc[:1000, 3].tolist()
-test_flank_before = df.iloc[:1000, 4].tolist()
-test_flank_after = df.iloc[:1000, 5].tolist()
-
-splicegpt.add_test_data({
-	"sequence": test_sequence,
-	"label": test_label,
-  "organism": test_organism,
-  "gene": test_gene,
-  "flank_before": test_flank_before,
-  "flank_after": test_flank_after
-}, sequence_len=256, flanks_len=10, batch_size=16, feat_hide_prob=0.8)
-
-splicegpt.evaluate()
-
-for i in range(10):
-	prediction = splicegpt.predict_single({
-		"sequence": test_sequence[i],
-		"organism": test_organism[i],
-		"gene": test_gene[i],
-		"flank_before": test_flank_before[i],
-		"flank_after": test_flank_after[i]
-	}, map_pred=True)
-
-	print(f"Expected: {test_label[i]} - Prediction: {prediction}")
