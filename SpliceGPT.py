@@ -223,25 +223,21 @@ class SpliceGPT():
 
 	def _save_checkpoint(self, epoch=None):
 		if epoch != None:
-			path = f"{self._model_dir}/checkpoints/checkpoint-epoch-{epoch}.pth"
+			path = f"{self._model_dir}/checkpoints/checkpoint-epoch-{epoch}-"
 		else:
-			path = f"{self._model_dir}/best.pth"
+			path = f"{self._model_dir}/best-"
 
-		torch.save({
-			"model_state_dict": self.model.state_dict(),
-			"optimizer_state_dict": self.optimizer.state_dict(),
-		}, path)
+		torch.save(self.model.state_dic(), f"{path}-model.pth")
+		torch.save(self.optimizer.state_dict(), f"{path}-optimizer.pth")
 
 	def _load_checkpoint(self, epoch=None):
 		if epoch != None:
-			path = f"{self._model_dir}/checkpoints/checkpoint-epoch-{epoch}.pth"
+			path = f"{self._model_dir}/checkpoints/checkpoint-epoch-{epoch}-"
 		else:
-			path = f"{self._model_dir}/best.pth"
+			path = f"{self._model_dir}/best-"
 
-		model, optimizer = torch.load(path, weights_only=True).values()
-		
-		self.model.load_state_dict(model)
-		self.optimizer.load_state_dict(optimizer)
+		self.model.load_state_dict(torch.load(f"{path}-model.pth", map_location=self._device))
+		self.optimizer.load_state_dict(torch.load(f"{path}-optimizer.pth", map_location=self._device))
 
 	def _save_history(self, history):
 		df = pd.DataFrame(history)
@@ -294,6 +290,7 @@ class SpliceGPT():
 			train_bar.close()
 
 			if evaluation:
+				best = False
 				self.model.eval()
 				eval_loss = 0
 
@@ -320,11 +317,16 @@ class SpliceGPT():
 				self._save_checkpoint(epoch=epoch)
 
 			if eval_loss < best_eval_loss:
+				best = True
 				best_eval_loss = eval_loss
 				self._save_checkpoint()
 		
 		if keep_best:
-			self._load_checkpoint()
+			if evaluation:
+				if not best:
+					self._load_checkpoint()
+			else:
+				print("Cannot load best because evaluation is setted off. To be able to restore the best model from the stored ones, please allow evaluation to execute with trainning.")
 
 		if self.notification:
 			notification.notify(title="Training complete", timeout=5)
