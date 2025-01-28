@@ -8,8 +8,9 @@ import pandas as pd
 import torch
 
 
-class SplicingTransformersBase(ABC):
+class SplicingTransformers(ABC):
 	def _set_seed(self, seed):
+		self.seed = seed
 		random.seed(seed)
 		np.random.seed(seed)
 		torch.manual_seed(seed)
@@ -107,7 +108,7 @@ class SplicingTransformersBase(ABC):
 		else:
 			path = f"{self._model_dir}/best-"
 
-		torch.save(self.model.state_dic(), f"{path}-model.pth")
+		torch.save(self.model.state_dict(), f"{path}-model.pth")
 		torch.save(self.optimizer.state_dict(), f"{path}-optimizer.pth")
 
 	def _load_checkpoint(self, epoch=None):
@@ -136,13 +137,13 @@ class SplicingTransformersBase(ABC):
 		pass
 
 	@abstractmethod
-	def predict_single(self, sequence, map_pred):
+	def predict_single(self, data, map_pred):
 		pass
 
-	def predict_batch(self, sequences, map_pred=True):
+	def predict_batch(self, data, map_pred=True):
 		preds = []
-		for sequence in sequences:
-			pred = self.predict_single(sequence=sequence, map_pred=map_pred)
+		for i in data:
+			pred = self.predict_single(data=i, map_pred=map_pred)
 			preds.append(pred)
 
-			return preds
+		return preds

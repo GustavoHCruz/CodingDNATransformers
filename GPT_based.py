@@ -1,14 +1,12 @@
-import json
-import os
 import random
 
-import numpy as np
-import pandas as pd
 import torch
 from plyer import notification
 from torch.optim import AdamW
 from torch.utils.data import DataLoader, Dataset, random_split
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
+
+from SplicingTransformers import SplicingTransformers
 
 try:
 	from IPython import get_ipython
@@ -21,7 +19,7 @@ if in_notebook:
 else:
 	from tqdm import tqdm
 
-class SpliceGPT():
+class SpliceGPT(SplicingTransformers):
 	class __SpliceGPTDataset__(Dataset):
 		def __init__(self, data, tokenizer, sequence_len, flanks_len, feat_hide_prob):
 			self.data = data
@@ -62,46 +60,12 @@ class SpliceGPT():
 
 			return torch.tensor(input_ids), torch.tensor(labels)
 
-	def _set_seed(self, seed):
-		random.seed(seed)
-		np.random.seed(seed)
-		torch.manual_seed(seed)
-		torch.cuda.manual_seed(seed)
-		torch.cuda.manual_seed_all(seed)
-		torch.backends.cudnn.deterministic = True
-		torch.backends.cudnn.benchmark = False
-
 	def __init__(self, checkpoint="gpt2", device="cuda", seed=None, notification=False, logs_dir="logs", alias=None):
-		"""
-		A class to train and evaluate a GPT-based neural network for introns and exons classification.
-
-		This class manages preprocessing, training, evaluation, and sequence classification tasks for the model. 
-		It includes methods for training, creating dataloaders, evaluation, and prediction, and supports execution 
-		on both GPU and CPU.
-
-		Attributes:
-			checkpoint (str): The checkpoint to start training or evaluation from.
-			device (str): The device to execute the model on ('cpu' or 'cuda').
-			seed (int): A custom seed to enable deterministic results.
-			notification (bool): If enabled, sends a GUI notification when training or evaluation concludes.
-		"""
-		self._device = device
-		self.logs_dir = logs_dir
-		self.checkpoint = checkpoint
-		self.alias = alias or checkpoint
-
-		if (checkpoint != "gpt2"):
+		if checkpoint != "gpt2":
 			self.load_checkpoint(checkpoint)
 		else:
 			self.model = GPT2LMHeadModel.from_pretrained(checkpoint)
 			self.tokenizer = GPT2Tokenizer.from_pretrained(checkpoint, padding_side="left")
-
-		if seed is not None:
-			self._set_seed(seed)
-
-		self.notification = notification
-
-		self.model.to(self._device)
 
 		if checkpoint == "gpt2":
 			self.tokenizer.pad_token = self.tokenizer.eos_token
@@ -113,34 +77,11 @@ class SpliceGPT():
 		self.intron_token = self.tokenizer.encode("[INTRON]", add_special_tokens=False)
 		self.exon_token = self.tokenizer.encode("[EXON]", add_special_tokens=False)
 
-	def _get_next_model_dir(self):
-		os.makedirs(self.logs_dir, exist_ok=True)
+		super().__init__(checkpoint=checkpoint, device=device, seed=seed, notification=notification, logs_dir=logs_dir, alias=alias)
 
-		model_dir = os.path.join(self.logs_dir, self.alias)
-
-		counter = 1
-		while os.path.exists(f"{model_dir}_{counter}"):
-			counter += 1
-
-		model_dir = f"{model_dir}_{counter}"
-		
-		os.makedirs(f"{model_dir}/checkpoints")
-
-		self._model_dir = model_dir
-	
-	def save_checkpoint(self, path=None):
-		saving_path = f"models/{self.alias}"
-		if path:
-			saving_path = path
-
-		self.model.save_pretrained(saving_path)
-		self.tokenizer.save_pretrained(saving_path)
-
-		print(f"Model Successful Saved at {saving_path}")
-
-	def load_checkpoint(self, checkpoint):
-		self.model = GPT2LMHeadModel.from_pretrained(checkpoint)
-		self.tokenizer = GPT2Tokenizer.from_pretrained(checkpoint, padding_side="left")
+	def load_checkpoint(self, path):
+		self.model = GPT2LMHeadModel.from_pretrained(path)
+		self.tokenizer = GPT2Tokenizer.from_pretrained(path, padding_side="left")
 
 	def _collate_fn(self, batch):
 		input_ids, labels = zip(*batch)
@@ -163,7 +104,7 @@ class SpliceGPT():
 
 		return data
 
-	def add_train_data(self, data, sequence_len=512, flanks_len=10, batch_size=32, train_percentage=0.8, feat_hide_prob=0.01):
+	def add_train_data(self, data, batch_size=32, sequence_len=512, flanks_len=10, train_percentage=0.8, feat_hide_prob=0.01):
 		if sequence_len > 512:
 			raise ValueError("cannot support sequences_len higher than 512")
 		if flanks_len > 50:
@@ -191,7 +132,7 @@ class SpliceGPT():
 		
 		self.train_dataloader = DataLoader(self.train_dataset, batch_size=batch_size, shuffle=True, collate_fn=self._collate_fn)
 
-	def _check_test_compability(self, sequence_len, flanks_len, batch_size, feat_hide_prob):
+	def _check_test_compatibility(self, sequence_len, flanks_len, batch_size, feat_hide_prob):
 		if hasattr(self, "_train_config"):
 			if self._train_config["sequence_len"] != sequence_len or \
 			self._train_config["flanks_len"] != flanks_len or \
@@ -200,56 +141,15 @@ class SpliceGPT():
 				print("Detected a different test dataloader configuration of the one used during training. This may lead to suboptimal results.")
 
 	def add_test_data(self, data, sequence_len=512, flanks_len=10, batch_size=32, feat_hide_prob=0.01):
-		self._check_test_compability(sequence_len, flanks_len, batch_size, feat_hide_prob)
+		self._check_test_compatibility(sequence_len, flanks_len, batch_size, feat_hide_prob)
 		data = self._process_data(data)
 
 		self.test_dataset = self.__SpliceGPTDataset__(data, self.tokenizer, sequence_len=sequence_len, flanks_len=flanks_len, feat_hide_prob=feat_hide_prob)
 		self.test_dataloader = DataLoader(self.test_dataset, batch_size=batch_size, shuffle=True, collate_fn=self._collate_fn)
 
-	def free_data(self, train=True, test=True):
-		if train:
-			self.train_dataset = None
-			self.train_dataloader = None
-			self.eval_dataset = None
-			self.eval_dataloader = None
-
-		if test:	
-			self.test_dataset = None
-			self.test_dataloader = None
-
-	def update_alias(self, alias):
-		self.alias = alias
-		self._model_dir = self._get_next_model_dir()
-
-	def _save_checkpoint(self, epoch=None):
-		if epoch != None:
-			path = f"{self._model_dir}/checkpoints/checkpoint-epoch-{epoch}-"
-		else:
-			path = f"{self._model_dir}/best-"
-
-		torch.save(self.model.state_dic(), f"{path}-model.pth")
-		torch.save(self.optimizer.state_dict(), f"{path}-optimizer.pth")
-
-	def _load_checkpoint(self, epoch=None):
-		if epoch != None:
-			path = f"{self._model_dir}/checkpoints/checkpoint-epoch-{epoch}-"
-		else:
-			path = f"{self._model_dir}/best-"
-
-		self.model.load_state_dict(torch.load(f"{path}-model.pth", map_location=self._device))
-		self.optimizer.load_state_dict(torch.load(f"{path}-optimizer.pth", map_location=self._device))
-
-	def _save_history(self, history):
-		df = pd.DataFrame(history)
-		df.to_csv(f"{self._model_dir}/history.csv", index=False)
-	
-	def _save_config(self):
-		with open(f"{self._model_dir}/config.json", "w") as f:
-			json.dump(self._train_config, f, indent=2)
-
-	def train(self, lr=0.0005, epochs=3, save_at_end=True, evaluation=True, keep_best=False, save_freq=5):
+	def train(self, lr=5e-4, epochs=3, save_at_end=True, evaluation=True, keep_best=False, save_freq=5):
 		if not hasattr(self, "train_dataloader"):
-			raise ValueError("Can't find the train dataloader, make sure you initialized it.")
+			raise ValueError("Cannot find the train dataloader, make sure you initialized it.")
 		
 		self._get_next_model_dir()
 
@@ -258,10 +158,13 @@ class SpliceGPT():
 
 		self._train_config = dict(**{
 			"lr": lr,
-			"epochs": epochs
+			"epochs": epochs,
+			"seed": self.seed
 		}, **self._data_config)
 
-		history = {"epoch": [], "train_loss": [], "eval_loss": []}
+		history = {"epoch": [], "train_loss": []}
+		if evaluation:
+			history.update({"eval_loss": []})
 
 		best_eval_loss = float("inf")
 
@@ -351,11 +254,10 @@ class SpliceGPT():
 		exon_total = 0
 		intron_correct = 0
 		intron_total = 0
-		data_len = len(self.test_dataloader)
 
 		self.model.eval()
 		with torch.no_grad():
-			eval_bar = tqdm(total=data_len, desc="Evaluating", position=0, leave=True)
+			eval_bar = tqdm(self.test_dataloader, desc="Evaluating", leave=True)
 			for batch in self.test_dataloader:
 				input_ids, attention_mask, labels = [b.to(self._device) for b in batch]
 
@@ -398,12 +300,13 @@ class SpliceGPT():
 				eval_bar.set_postfix(loss=total_loss/eval_bar.n)
 
 		eval_bar.close()		
-		avg_loss = total_loss / data_len
+		avg_loss = total_loss / len(self.test_dataloader)
 		overall_accuracy = total_correct / total_samples if total_samples > 0 else 0.0
 		exon_accuracy = exon_correct / exon_total if exon_total > 0 else 0.0
 		intron_accuracy = intron_correct / intron_total if intron_total > 0 else 0.0
 
-		print(f"Evaluation complete. Average loss: {avg_loss:.4f}")
+		print(f"Evaluation complete")
+		print(f"Average loss: {avg_loss:.4f}")
 		print(f"Overall Accuracy: {overall_accuracy:.4f}")
 		print(f"Exon accuracy: {exon_accuracy:.4f}")
 		print(f"Intron accuracy: {intron_accuracy:.4f}")
@@ -411,10 +314,10 @@ class SpliceGPT():
 		if self.notification:
 			notification.notify(title="Evaluation complete", timeout=5)
 	
-	def _prediction_token_mapping(self, token):
-		return token.replace("[", "").replace("]", "").lower()
+	def _prediction_mapping(self, prediction):
+		return prediction.replace("[", "").replace("]", "").lower()
 
-	def predict_single(self, data, repetition_penalty=2.0, map_pred=True):
+	def predict_single(self, data, map_pred=True):
 		sequence = self._process_sequence(data["sequence"])
 		
 		keys = ["gene", "organism", "flank_before", "flank_after"]
@@ -432,7 +335,7 @@ class SpliceGPT():
 				input_ids=input_ids,
 				attention_mask=torch.tensor([1]*input_ids.size(-1)).unsqueeze(0).to(self._device),
 				max_new_tokens=1,
-				repetition_penalty=repetition_penalty,
+				repetition_penalty=2.0,
 				pad_token_id=self.tokenizer.eos_token_id,
 			)
 
@@ -440,14 +343,7 @@ class SpliceGPT():
 		new_token = self.tokenizer.decode(generated_token_ids[input_ids.size(-1)], skip_special_tokens=True).strip()
 
 		if map_pred:
-			return self._prediction_token_mapping(new_token)
+			return self._prediction_mapping(new_token)
 		
 		return new_token
 	
-	def predict_batch(self, data_batch, repetition_penalty=2.0, map_pred=True):
-		preds = []
-		for data in data_batch:
-			pred = self.predict_single(data, repetition_penalty, map_pred)
-			preds.append(pred)
-		
-		return preds
