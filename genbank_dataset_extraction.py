@@ -16,7 +16,9 @@ if in_notebook:
 else:
 	from tqdm import tqdm
 
-def splicing_sites_extraction(genbank_file, csv_output_file, seq_max_len=512, flank_len=10):
+def splicing_sites_extraction(genbank_file, csv_output_file, seq_max_len=512):
+	flank_len = 10
+	flank_extended_len = 25
 	total_records = None
 
 	cache_file_path = "cache/genbank_files_len"
@@ -42,7 +44,7 @@ def splicing_sites_extraction(genbank_file, csv_output_file, seq_max_len=512, fl
 	if new_reading:
 		progress_bar = tqdm(bar_format="{desc}")
 	else:
-		progress_bar = tqdm(total=total_records, desc="File Scan Progress", position=0, leave=True, ncols=100)
+		progress_bar = tqdm(total=total_records, desc="File Scan Progress", leave=True)
 
 	with open(genbank_file, "r") as gb_file:
 		for record in SeqIO.parse(gb_file, "genbank"):
@@ -62,11 +64,15 @@ def splicing_sites_extraction(genbank_file, csv_output_file, seq_max_len=512, fl
 					gene = feature.qualifiers.get("gene", "")
 					feature_sequence = sequence[location.start:location.end]
 					before = ""
+					before_extended = ""
 					if location.start > 0:
 						before = sequence[location.start-flank_len:location.start]
+						before_extended = sequence[location.start-flank_extended_len:location.start]
 					after = ""
+					after_extended = ""
 					if location.end < len(sequence):
 						after = sequence[location.end+1:location.end+1+flank_len]
+						after_extended[location.end+1:location.end+1+flank_extended_len]
 
 					if len(feature_sequence) > seq_max_len:
 						continue
@@ -78,7 +84,9 @@ def splicing_sites_extraction(genbank_file, csv_output_file, seq_max_len=512, fl
 						"organism": str(organism),
 						"gene": str(gene),
 						"flank_before": str(before),
-						"flank_after": str(after)
+						"flank_after": str(after),
+						"flank_before_extended": str(before_extended),
+						"flank_after_extended": str(after_extended),
 					})
 
 			record_counter += 1
@@ -90,25 +98,29 @@ def splicing_sites_extraction(genbank_file, csv_output_file, seq_max_len=512, fl
 
 	unique_records = set()
 	with open(csv_output_file, mode="w", newline="", encoding="utf-8") as csvfile:
-		fieldnames = ["sequence", "label", "organism", "gene", "flank_before", "flank_after"]
+		fieldnames = ["sequence", "label", "organism", "gene", "flank_before", "flank_after", "flank_before_extended", "flank_after_extended"]
 
-		progress_bar = tqdm(total=len(data), desc="Writing CSV Progress", position=0, leave=True, ncols=100)
+		progress_bar = tqdm(total=len(data), desc="Writing CSV Progress", leave=True)
 
 		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 		writer.writeheader()
 
 		duplicated_counter = 0
+		counter = 0
 		for record in data:
 			record_tuple = tuple(record[field] for field in fieldnames)
-
-			if record_tuple not in unique_records:
-				unique_records.add(record_tuple)
+			record_hash = hash(record_tuple)
+			
+			if record_hash not in unique_records:
+				unique_records.add(record_hash)
 				writer.writerow(record)
 			else:
 				duplicated_counter += 1
+			counter += 1
 			
-			progress_bar.update(1)
-			progress_bar.set_postfix_str(f"{duplicated_counter} duplicated records ignored")
+			if counter % 1000 == 0:
+				progress_bar.update(1000)
+				progress_bar.set_postfix_str(f"{duplicated_counter} duplicated")
 
 	if new_reading:
 		df.loc[len(df)] = [genbank_file, record_counter]

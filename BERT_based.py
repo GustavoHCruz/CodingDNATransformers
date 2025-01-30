@@ -67,7 +67,7 @@ class SpliceBERT(SplicingTransformers):
 		if checkpoint == "bert-base-uncased":
 			special_tokens = ["[A]", "[C]", "[G]", "[T]", "[R]", "[Y]", "[S]", "[W]", "[K]", "[M]", "[B]", "[D]", "[H]", "[V]", "[N]"]
 			self.tokenizer.add_tokens(special_tokens)
-			self.model.resize_token_embeddings(len(self.tokenizer), mean_resizing=False)
+			self.model.resize_token_embeddings(len(self.tokenizer))
 
 		self.intron_token = 0
 		self.exon_token = 1
@@ -152,9 +152,12 @@ class SpliceBERT(SplicingTransformers):
 
 		self._train_config = dict(**{
 			"lr": lr,
-			"epochs": epochs,
-			"seed": self.seed
+			"epochs": epochs
 		}, **self._data_config)
+		if hasattr(self, "seed"):
+			self._train_config.update({
+				"seed": self.seed
+			})
 
 		history = {"epoch": [], "train_loss": []}
 		if evaluation:
@@ -221,7 +224,7 @@ class SpliceBERT(SplicingTransformers):
 			if (epoch+1) % save_freq == 0:
 				self._save_checkpoint(epoch=epoch)
 
-			if eval_loss < best_eval_loss:
+			if evaluation and eval_loss < best_eval_loss:
 				best = True
 				best_eval_loss = eval_loss
 				self._save_checkpoint()
@@ -433,9 +436,12 @@ class SpliceDNABERT(SplicingTransformers):
 
 		self._train_config = dict(**{
 			"lr": lr,
-			"epochs": epochs,
-			"seed": self.seed
+			"epochs": epochs
 		}, **self._data_config)
+		if hasattr(self, "seed"):
+			self._train_config.update({
+				"seed": self.seed
+			})
 
 		history = {"epoch": [], "train_loss": [], "eval_loss": [], "eval_accuracy": []}
 
@@ -500,7 +506,7 @@ class SpliceDNABERT(SplicingTransformers):
 			if (epoch+1) % save_freq == 0:
 				self._save_checkpoint(epoch=epoch)
 
-			if eval_loss < best_eval_loss:
+			if evaluation and eval_loss < best_eval_loss:
 				best = True
 				best_eval_loss = eval_loss
 				self._save_checkpoint()

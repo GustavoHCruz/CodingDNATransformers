@@ -4,7 +4,7 @@ import torch
 from plyer import notification
 from torch.optim import AdamW
 from torch.utils.data import DataLoader, Dataset, random_split
-from transformers import GPT2LMHeadModel, GPT2Tokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from SplicingTransformers import SplicingTransformers
 
@@ -61,13 +61,14 @@ class SpliceGPT(SplicingTransformers):
 			return torch.tensor(input_ids), torch.tensor(labels)
 
 	def __init__(self, checkpoint="gpt2", device="cuda", seed=None, notification=False, logs_dir="logs", alias=None):
-		if checkpoint != "gpt2":
+		supported = ["gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl", "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B", "EleutherAI/gpt-neo-125M", "EleutherAI/gpt-neo-1.3B", "bigscience/bloom-560m"]
+		
+		if checkpoint not in supported:
 			self.load_checkpoint(checkpoint)
 		else:
-			self.model = GPT2LMHeadModel.from_pretrained(checkpoint)
-			self.tokenizer = GPT2Tokenizer.from_pretrained(checkpoint, padding_side="left")
-
-		if checkpoint == "gpt2":
+			self.model = AutoModelForCausalLM.from_pretrained(checkpoint)
+			self.tokenizer = AutoTokenizer.from_pretrained(checkpoint, padding_side="left")
+			
 			self.tokenizer.pad_token = self.tokenizer.eos_token
 
 			special_tokens = ["[A]", "[C]", "[G]", "[T]", "[R]", "[Y]", "[S]", "[W]", "[K]", "[M]", "[B]", "[D]", "[H]", "[V]", "[N]", "[EXON]", "[INTRON]"]
@@ -80,8 +81,8 @@ class SpliceGPT(SplicingTransformers):
 		super().__init__(checkpoint=checkpoint, device=device, seed=seed, notification=notification, logs_dir=logs_dir, alias=alias)
 
 	def load_checkpoint(self, path):
-		self.model = GPT2LMHeadModel.from_pretrained(path)
-		self.tokenizer = GPT2Tokenizer.from_pretrained(path, padding_side="left")
+		self.model = AutoModelForCausalLM.from_pretrained(path)
+		self.tokenizer = AutoTokenizer.from_pretrained(path, padding_side="left")
 
 	def _collate_fn(self, batch):
 		input_ids, labels = zip(*batch)
@@ -158,9 +159,12 @@ class SpliceGPT(SplicingTransformers):
 
 		self._train_config = dict(**{
 			"lr": lr,
-			"epochs": epochs,
-			"seed": self.seed
+			"epochs": epochs
 		}, **self._data_config)
+		if hasattr(self, "seed"):
+			self._train_config.update({
+				"seed": self.seed
+			})
 
 		history = {"epoch": [], "train_loss": []}
 		if evaluation:
@@ -219,7 +223,7 @@ class SpliceGPT(SplicingTransformers):
 			if (epoch+1) % save_freq == 0:
 				self._save_checkpoint(epoch=epoch)
 
-			if eval_loss < best_eval_loss:
+			if evaluation and eval_loss < best_eval_loss:
 				best = True
 				best_eval_loss = eval_loss
 				self._save_checkpoint()
@@ -346,4 +350,3 @@ class SpliceGPT(SplicingTransformers):
 			return self._prediction_mapping(new_token)
 		
 		return new_token
-	

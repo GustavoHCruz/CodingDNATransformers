@@ -28,7 +28,7 @@ class SplicingTransformers(ABC):
 
 		self.model.to(self._device)
 
-		if seed is not None:
+		if seed:
 			self._set_seed(seed)
 	
 	def _get_next_model_dir(self):
@@ -84,7 +84,8 @@ class SplicingTransformers(ABC):
 	def _check_test_compatibility(self, *args, **kargs):
 		pass
 
-	def _add_test_data(self, data, batch_size, *args, **kargs):
+	@abstractmethod
+	def add_test_data(self, data, batch_size, *args, **kargs):
 		pass
 	
 	def free_data(self, train=True, test=True):
