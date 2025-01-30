@@ -443,7 +443,9 @@ class SpliceDNABERT(SplicingTransformers):
 				"seed": self.seed
 			})
 
-		history = {"epoch": [], "train_loss": [], "eval_loss": [], "eval_accuracy": []}
+		history = {"epoch": [], "train_loss": []}
+		if evaluation:
+			history.update({"eval_loss": [], "eval_accuracy": []})
 
 		best_eval_loss = float("inf")
 
