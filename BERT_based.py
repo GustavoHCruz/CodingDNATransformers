@@ -1,5 +1,7 @@
 import random
+import time
 
+import numpy as np
 import torch
 from plyer import notification
 from torch.optim import AdamW
@@ -57,7 +59,10 @@ class SpliceBERT(SplicingTransformers):
 
 			return torch.tensor(input_ids), torch.tensor(label)
 	
-	def __init__(self, checkpoint="bert-base-uncased", device="cuda", seed=None, notification=False,  logs_dir="logs", alias=None):
+	def __init__(self, checkpoint="bert-base-uncased", device="cuda", seed=None, notification=False,  logs_dir="logs", models_dir="models", alias=None):
+		if seed:
+			self._set_seed(seed)
+
 		if checkpoint != "bert-base-uncased":
 			self.load_checkpoint(checkpoint)
 		else:
@@ -71,7 +76,7 @@ class SpliceBERT(SplicingTransformers):
 
 		self.intron_token = 0
 		self.exon_token = 1
-		super().__init__(checkpoint=checkpoint, device=device, seed=seed, notification=notification, logs_dir=logs_dir, alias=alias)
+		super().__init__(checkpoint=checkpoint, device=device, seed=seed, notification=notification, logs_dir=logs_dir, models_dir=models_dir, alias=alias)
 		
 	def load_checkpoint(self, path):
 		self.model = BertForSequenceClassification.from_pretrained(path)
@@ -145,6 +150,7 @@ class SpliceBERT(SplicingTransformers):
 		if not hasattr(self, "train_dataloader"):
 			raise ValueError("Cannot find the train dataloader, make sure you initialized it.")
 		
+		self.start_time = time.time()
 		self._get_next_model_dir()
 		
 		self.model.to(self._device)
@@ -159,7 +165,7 @@ class SpliceBERT(SplicingTransformers):
 				"seed": self.seed
 			})
 
-		history = {"epoch": [], "train_loss": []}
+		history = {"epoch": [], "time": [], "train_loss": []}
 		if evaluation:
 			history.update({"eval_loss": [], "eval_accuracy": []})
 
@@ -228,6 +234,9 @@ class SpliceBERT(SplicingTransformers):
 				best = True
 				best_eval_loss = eval_loss
 				self._save_checkpoint()
+			
+			self.epoch_end_time = time.time()
+			history["time"].append(self.epoch_end_time - self.start_time)
 
 		if keep_best:
 			if evaluation:
@@ -304,6 +313,15 @@ class SpliceBERT(SplicingTransformers):
 		print(f"Exon accuracy: {exon_accuracy:.4f}")
 		print(f"Intron accuracy: {intron_accuracy:.4f}")
 
+		self._eval_results = {
+			"avg loss": total_loss,
+			"overall accuracy": overall_accuracy,
+			"exon accuracy": exon_accuracy,
+			"intron accuracy": intron_accuracy
+		}
+
+		self._seve_evaluation_results()
+
 		if self.notification:
 			notification.notify(title="Evaluation complete", timeout=5)
 	
@@ -349,7 +367,10 @@ class SpliceDNABERT(SplicingTransformers):
 
 			return torch.tensor(input_ids), torch.tensor(label)
 	
-	def __init__(self, checkpoint="zhihan1996/DNA_bert_6", device="cuda", seed=None, notification=False,  logs_dir="logs", alias=None):
+	def __init__(self, checkpoint="zhihan1996/DNA_bert_6", device="cuda", seed=None, notification=False,  logs_dir="logs", models_dir="models", alias=None):
+		if seed:
+			self._set_seed(seed)
+
 		if checkpoint != "zhihan1996/DNA_bert_6":
 			self.load_checkpoint(checkpoint)
 		else:
@@ -358,7 +379,7 @@ class SpliceDNABERT(SplicingTransformers):
 		
 		self.intron_token = 0
 		self.exon_token = 1
-		super().__init__(checkpoint=checkpoint, device=device, seed=seed, notification=notification, logs_dir=logs_dir, alias=alias)
+		super().__init__(checkpoint=checkpoint, device=device, seed=seed, notification=notification, logs_dir=logs_dir, models_dir=models_dir, alias=alias)
 		
 	def load_checkpoint(self, path):
 		self.model = AutoModelForSequenceClassification.from_pretrained(path)
@@ -429,6 +450,7 @@ class SpliceDNABERT(SplicingTransformers):
 		if not hasattr(self, "train_dataloader"):
 			raise ValueError("Cannot find the train dataloader, make sure you initialized it.")
 		
+		self.start_time = time.time()
 		self._get_next_model_dir()
 		
 		self.model.to(self._device)
@@ -443,7 +465,7 @@ class SpliceDNABERT(SplicingTransformers):
 				"seed": self.seed
 			})
 
-		history = {"epoch": [], "train_loss": []}
+		history = {"epoch": [], "time": [], "train_loss": []}
 		if evaluation:
 			history.update({"eval_loss": [], "eval_accuracy": []})
 
@@ -512,6 +534,9 @@ class SpliceDNABERT(SplicingTransformers):
 				best = True
 				best_eval_loss = eval_loss
 				self._save_checkpoint()
+			
+			self.epoch_end_time = time.time()
+			history["time"].append(self.epoch_end_time - self.start_time)
 
 		if keep_best:
 			if evaluation:
@@ -586,6 +611,15 @@ class SpliceDNABERT(SplicingTransformers):
 		print(f"Overall Accuracy: {overall_accuracy:.4f}")
 		print(f"Exon accuracy: {exon_accuracy:.4f}")
 		print(f"Intron accuracy: {intron_accuracy:.4f}")
+
+		self._eval_results = {
+			"avg loss": total_loss,
+			"overall accuracy": overall_accuracy,
+			"exon accuracy": exon_accuracy,
+			"intron accuracy": intron_accuracy
+		}
+
+		self._seve_evaluation_results()
 
 		if self.notification:
 			notification.notify(title="Evaluation complete", timeout=5)
