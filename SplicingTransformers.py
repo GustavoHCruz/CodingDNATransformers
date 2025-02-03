@@ -86,7 +86,7 @@ class SplicingTransformers(ABC):
 		pass
 
 	@abstractmethod
-	def add_train_data(self, data, batch_size, sequence_len, *args, **kargs):
+	def add_train_data(self, data, batch_size, sequence_len, train_percentage, data_config):
 		pass
 
 	@abstractmethod
@@ -94,7 +94,7 @@ class SplicingTransformers(ABC):
 		pass
 
 	@abstractmethod
-	def add_test_data(self, data, batch_size, *args, **kargs):
+	def add_test_data(self, data, batch_size, sequence_len, data_config):
 		pass
 	
 	def free_data(self, train=True, test=True):
