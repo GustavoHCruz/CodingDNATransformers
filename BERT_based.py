@@ -102,7 +102,14 @@ class SpliceBERT(SplicingTransformers):
 
 		return data
 	
-	def add_train_data(self, data, sequence_len=512, flanks_len=10, batch_size=32, train_percentage=0.8, feat_hide_prob=0.01):
+	def add_train_data(self, data, batch_size=32, sequence_len=512, train_percentage=0.8, data_config=None):
+		flanks_len = 10
+		feat_hide_prob = 0.01
+		if hasattr(data_config, "flanks_len"):
+			flanks_len = data_config["flanks_len"]
+		if hasattr(data_config, "feat_hide_prob"):
+			feat_hide_prob = data_config["feat_hide_prob"]
+
 		if sequence_len > 512:
 			raise ValueError("cannot support sequences_len higher than 512")
 		if flanks_len > 50:
@@ -138,7 +145,14 @@ class SpliceBERT(SplicingTransformers):
 			self._train_config["feat_hide_prob"] != feat_hide_prob:
 				print("Detected a different test dataloader configuration of the one used during training. This may lead to suboptimal results.")
 
-	def add_test_data(self, data, sequence_len=512, flanks_len=10, batch_size=32, feat_hide_prob=0.01):
+	def add_test_data(self, data, batch_size=32, sequence_len=512, data_config=None):
+		flanks_len = 10
+		feat_hide_prob = 0.01
+		if hasattr(data_config, "flanks_len"):
+			flanks_len = data_config["flanks_len"]
+		if hasattr(data_config, "feat_hide_prob"):
+			feat_hide_prob = data_config["feat_hide_prob"]
+
 		self._check_test_compatibility(sequence_len=sequence_len, flanks_len=flanks_len, batch_size=batch_size, feat_hide_prob=feat_hide_prob)
 
 		data = self._process_data(data)
@@ -146,7 +160,7 @@ class SpliceBERT(SplicingTransformers):
 		self.test_dataset = self.__SpliceBERTDataset__(data, self.tokenizer, sequence_len=sequence_len, flanks_len=flanks_len, feat_hide_prob=feat_hide_prob)
 		self.test_dataloader = DataLoader(self.test_dataset, batch_size=batch_size, shuffle=True, collate_fn=self._collate_fn)
 
-	def train(self, lr=2e-5, epochs=3, save_at_end=None, evaluation=True, keep_best=False, save_freq=5):
+	def train(self, lr=2e-5, epochs=3, evaluation=True, save_at_end=None, keep_best=False, save_freq=5):
 		if not hasattr(self, "train_dataloader"):
 			raise ValueError("Cannot find the train dataloader, make sure you initialized it.")
 		
@@ -411,7 +425,7 @@ class SpliceDNABERT(SplicingTransformers):
 
 		return data
 	
-	def add_train_data(self, data, sequence_len=512, batch_size=32, train_percentage=0.8):
+	def add_train_data(self, data, sequence_len=512, batch_size=32, train_percentage=0.8, data_config=None):
 		if sequence_len > 512:
 			raise ValueError("cannot support sequences_len higher than 512")
 
@@ -438,7 +452,7 @@ class SpliceDNABERT(SplicingTransformers):
 			self._train_config["batch_size"] != batch_size:
 				print("Detected a different test dataloader configuration of the one used during training. This may lead to suboptimal results.")
 
-	def add_test_data(self, data, sequence_len=512, batch_size=32):
+	def add_test_data(self, data, batch_size=32, sequence_len=512, data_config=None):
 		self._check_test_compatibility(sequence_len=sequence_len, batch_size=batch_size)
 
 		data = self._process_data(data)
@@ -446,7 +460,7 @@ class SpliceDNABERT(SplicingTransformers):
 		self.test_dataset = self.__SpliceDNABERTDataset__(data, self.tokenizer, max_length=sequence_len)
 		self.test_dataloader = DataLoader(self.test_dataset, batch_size=batch_size, shuffle=True, collate_fn=self._collate_fn)
 
-	def train(self, lr=5e-5, epochs=3, save_at_end=None, evaluation=True, keep_best=False, save_freq=5):
+	def train(self, lr=5e-5, epochs=3, evaluation=True, save_at_end=None, keep_best=False, save_freq=5):
 		if not hasattr(self, "train_dataloader"):
 			raise ValueError("Cannot find the train dataloader, make sure you initialized it.")
 		
