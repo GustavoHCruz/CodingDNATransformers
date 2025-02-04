@@ -80,13 +80,22 @@ data_config = {
 }
 
 model.add_train_data({
-    "sequence": train_sequence,
-    "label": train_label,
-    "organism": train_organism,
-    "gene": train_gene,
-    "flank_before": train_flank_before,
-    "flank_after": train_flank_after
+  "sequence": train_sequence,
+  "label": train_label,
+  "organism": train_organism,
+  "gene": train_gene,
+  "flank_before": train_flank_before,
+  "flank_after": train_flank_after
 }, batch_size=config["batch_size"], sequence_len=sequence_len, train_percentage=config["train_percentage"], data_config=data_config)
+
+model.add_test_data({
+  "sequence": test_sequence,
+  "label": test_label,
+  "organism": test_organism,
+  "gene": test_gene,
+  "flank_before": test_flank_before,
+  "flank_after": test_flank_after
+}, batch_size=config["batch_size"], sequence_len=sequence_len, data_config=data_config)
 
 model.train(lr=config["lr"], epochs=config["epochs"], save_at_end=True, evaluation=False, save_freq=1)
 model.evaluate()
