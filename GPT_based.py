@@ -347,7 +347,7 @@ class SpliceGPT(SplicingTransformers):
 			"intron accuracy": intron_accuracy
 		}
 
-		self._seve_evaluation_results()
+		self._save_evaluation_results()
 
 		if self.notification:
 			notification.notify(title="Evaluation complete", timeout=5)
