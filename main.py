@@ -67,9 +67,9 @@ model_to_use = config["checkpoint_base"]
 if not config["checkpoint_default"]:
   model_to_use = config["checkpoint_to_load"]
 
-if model_to_use in gpt_models:
+if config["checkpoint_base"] in gpt_models:
   model = SpliceGPT(model_to_use, seed=config["seed"], alias=config["name"])
-elif model_to_use == "bert-base-uncased":
+elif config["checkpoint_base"] == "bert-base-uncased":
   model = SpliceBERT(model_to_use, seed=config["seed"], alias=config["name"])
 else:
   model = SpliceDNABERT(model_to_use, seed=config["seed"], alias=config["name"])

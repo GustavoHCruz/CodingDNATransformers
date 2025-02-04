@@ -72,7 +72,7 @@ class SpliceBERT(SplicingTransformers):
 		if checkpoint == "bert-base-uncased":
 			special_tokens = ["[A]", "[C]", "[G]", "[T]", "[R]", "[Y]", "[S]", "[W]", "[K]", "[M]", "[B]", "[D]", "[H]", "[V]", "[N]"]
 			self.tokenizer.add_tokens(special_tokens)
-			self.model.resize_token_embeddings(len(self.tokenizer))
+			self.model.resize_token_embeddings(len(self.tokenizer), mean_resizing=False)
 
 		self.intron_token = 0
 		self.exon_token = 1
@@ -337,7 +337,7 @@ class SpliceBERT(SplicingTransformers):
 			"intron accuracy": intron_accuracy
 		}
 
-		self._seve_evaluation_results()
+		self._save_evaluation_results()
 
 		if self.notification:
 			notification.notify(title="Evaluation complete", timeout=5)
@@ -639,7 +639,7 @@ class SpliceDNABERT(SplicingTransformers):
 			"intron accuracy": intron_accuracy
 		}
 
-		self._seve_evaluation_results()
+		self._save_evaluation_results()
 
 		if self.notification:
 			notification.notify(title="Evaluation complete", timeout=5)

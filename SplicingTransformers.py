@@ -142,7 +142,7 @@ class SplicingTransformers(ABC):
 	def train(self, lr, epochs, evaluation, save_at_end, keep_best, save_freq):
 		pass
 
-	def _seve_evaluation_results(self, ):
+	def _save_evaluation_results(self):
 		with open(f"{self._logs_dir}/eval_results.json", "w") as f:
 			json.dump(self._eval_results, f, indent=2)
 
@@ -159,9 +159,5 @@ class SplicingTransformers(ABC):
 		pass
 
 	def predict_batch(self, data, map_pred=True):
-		preds = []
-		for i in data:
-			pred = self.predict_single(data=i, map_pred=map_pred)
-			preds.append(pred)
-
-		return preds
+		with torch.no_grad():
+			return [self.predict_single(data=i, map_pred=map_pred) for i in data]
