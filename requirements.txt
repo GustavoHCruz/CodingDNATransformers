@@ -1,0 +1,7 @@
+biopython==1.85
+ipython==8.12.3
+numpy==2.2.2
+pandas==2.2.3
+plyer==2.1.0
+tqdm==4.67.1
+transformers==4.44.2

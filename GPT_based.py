@@ -271,6 +271,9 @@ class SpliceGPT(SplicingTransformers):
 	def evaluate(self):
 		if not hasattr(self, "test_dataloader"):
 			raise ValueError("Can't find the test dataloader, make sure you initialized it.")
+		
+		if not hasattr(self, "_logs_dir"):
+			self._get_next_model_dir()
 
 		self.model.to(self._device)
 		total_loss = 0
