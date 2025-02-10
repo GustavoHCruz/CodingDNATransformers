@@ -77,7 +77,7 @@ class SpliceGPT(SplicingTransformers):
 
 			special_tokens = ["[A]", "[C]", "[G]", "[T]", "[R]", "[Y]", "[S]", "[W]", "[K]", "[M]", "[B]", "[D]", "[H]", "[V]", "[N]", "[EXON]", "[INTRON]"]
 			self.tokenizer.add_tokens(special_tokens)
-			self.model.resize_token_embeddings(len(self.tokenizer))
+			self.model.resize_token_embeddings(len(self.tokenizer), mean_resizing=False)
 
 		self.intron_token = self.tokenizer.encode("[INTRON]", add_special_tokens=False)
 		self.exon_token = self.tokenizer.encode("[EXON]", add_special_tokens=False)
