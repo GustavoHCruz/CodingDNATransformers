@@ -10,12 +10,12 @@ config = {
   "name": "bert-001",
   "checkpoint_default": True,
   "checkpoint_base": "bert-base-uncased",
-  "checkpoint_to_load": "bert-base-uncased",
-  "train_dataset": "100k",
+  "checkpoint_to_load": None,
+  "train_dataset": "6M",
   "train_percentage": 1.0,
   "test_dataset": "3k",
   "dataset_version": "small",
-  "seed": 4321,
+  "seed": 1234,
   "batch_size": 32,
   "hide_prob": 0.4,
   "lr": 5e-5,
@@ -24,9 +24,9 @@ config = {
 
 if config["checkpoint_base"] not in all_models:
   raise ValueError("Default Checkpoint Not Found")
-if config["train_dataset"] not in ["11M", "100k", "30k", "3k"]:
+if config["train_dataset"] not in ["6M", "100k", "30k", "3k"]:
   raise ValueError("Train Dataset Not Found")
-if config["test_dataset"] not in ["11M", "100k", "30k", "3k"]:
+if config["test_dataset"] not in ["6M", "100k", "30k", "3k"]:
   raise ValueError("Test Dataset Not Found")
 if config["dataset_version"] not in ["small", "normal"]:
   raise ValueError("Dataset Version Should be Small or Normal")
