@@ -14,7 +14,7 @@ df_introns = shuffled_df[shuffled_df["label"] == "intron"]
 df_exons_small = df_exons[df_exons["sequence"].str.len() < 128]
 df_introns_small = df_introns[df_introns["sequence"].str.len() < 128]
 
-def create_datasets(dataset_len, csv_name, create_small_version=True, datasets_dir="datasets"):
+def create_datasets(df_exons, df_introns, df_exons_small, df_introns_small, dataset_len, csv_name, create_small_version=True, datasets_dir="datasets"):
   exons = df_exons.sample(n=int(dataset_len/2), random_state=seed)
   introns = df_introns.sample(n=int(dataset_len/2), random_state=seed)
   df_exons = df_exons.drop(exons.index)
@@ -38,11 +38,16 @@ def create_datasets(dataset_len, csv_name, create_small_version=True, datasets_d
     df_small = pd.concat([exons_small, introns_small])
     df_small = df_small.drop(columns=["flank_before_extended", "flank_after_extended"])
 
-    df_small = df_small(frac=1, random_state=seed).reset_index(drop=True)
+    df_small = df_small.sample(frac=1, random_state=seed).reset_index(drop=True)
 
     df_small.to_csv(f"{datasets_dir}/{csv_name}_small.csv", index=False)
+  
+  return df_exons, df_introns, df_exons_small, df_introns_small
 
-create_datasets(3000000, "ExInSeqs_3M")
-create_datasets(100000, "ExInSeqs_100k")
-create_datasets(30000, "ExInSeqs_30k")
-create_datasets(5000, "ExInSeqs_5k")
+dataset_sizes = [5000000, 100000, 30000, 5000]
+dataset_names = ["ExInSeqs_5M", "ExInSeqs_100k", "ExInSeqs_30k", "ExInSeqs_5k"]
+
+for size, name in zip(dataset_sizes, dataset_names):
+  df_exons, df_introns, df_exons_small, df_introns_small = create_datasets(
+    df_exons, df_introns, df_exons_small, df_introns_small, size, name
+  )
