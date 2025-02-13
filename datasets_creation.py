@@ -6,111 +6,43 @@ from genbank_dataset_extraction import splicing_sites_extraction
 
 df = pd.read_csv("datasets/ExInSeqs_11M.csv", keep_default_na=False)
 
-shuffled_df = df.sample(frac=1).reset_index(drop=True)
+seed = 1234
 
+shuffled_df = df.sample(frac=1, random_state=seed).reset_index(drop=True)
 df_exons = shuffled_df[shuffled_df["label"] == "exon"]
 df_introns = shuffled_df[shuffled_df["label"] == "intron"]
-
 df_exons_small = df_exons[df_exons["sequence"].str.len() < 128]
 df_introns_small = df_introns[df_introns["sequence"].str.len() < 128]
 
-print(len(df_exons))
-print(len(df_exons_small))
-print(len(df_introns))
-print(len(df_introns_small))
+def create_datasets(dataset_len, csv_name, create_small_version=True, datasets_dir="datasets"):
+  exons = df_exons.sample(n=int(dataset_len/2), random_state=seed)
+  introns = df_introns.sample(n=int(dataset_len/2), random_state=seed)
+  df_exons = df_exons.drop(exons.index)
+  df_introns = df_introns.drop(introns.index)
+  
+  df = pd.concat([exons, introns])
+  df["flank_before"] = df["flank_before_extended"]
+  df["flank_after"] = df["flank_after_extended"]
+  df = df.drop(columns=["flank_before_extended", "flank_after_extended"])
+  
+  df = df.sample(frac=1, random_state=seed).reset_index(drop=True)
 
-# 3k -----------------------
+  df.to_csv(f"{datasets_dir}/{csv_name}.csv", index=False)
+  
+  if create_small_version:
+    exons_small = df_exons_small.sample(n=int(dataset_len/2), random_state=seed)
+    introns_small = df_introns_small.sample(n=int(dataset_len/2), random_state=seed)
+    df_exons_small = df_exons_small.drop(exons_small.index)
+    df_introns_small = df_introns_small.drop(introns_small.index)
+    
+    df_small = pd.concat([exons_small, introns_small])
+    df_small = df_small.drop(columns=["flank_before_extended", "flank_after_extended"])
 
-df_3k_small = pd.concat([df_exons_small.sample(n=1500), df_introns_small.sample(n=1500)])
-df_3k_small = df_3k_small.drop(columns=["flank_before_extended", "flank_after_extended"])
+    df_small = df_small(frac=1, random_state=seed).reset_index(drop=True)
 
-df_3k_small = df_3k_small.sample(frac=1).reset_index(drop=True)
-print(f"Exons: {len(df_3k_small[df_3k_small["label"] == "exon"])}")
-print(f"Introns: {len(df_3k_small[df_3k_small["label"] == "intron"])}")
-print(f"Total Len: {len(df_3k_small)}")
+    df_small.to_csv(f"{datasets_dir}/{csv_name}_small.csv", index=False)
 
-df_3k_small.to_csv("datasets/ExInSeqs_3k_small.csv", index=False)
-
-df_3k = pd.concat([df_exons.sample(n=1500), df_introns.sample(n=1500)])
-df_3k["flank_before"] = df_3k["flank_before_extended"]
-df_3k["flank_after"] = df_3k["flank_after_extended"]
-df_3k = df_3k.drop(columns=["flank_before_extended", "flank_after_extended"])
-
-df_3k = df_3k.sample(frac=1).reset_index(drop=True)
-print(f"Exons: {len(df_3k[df_3k["label"] == "exon"])}")
-print(f"Introns: {len(df_3k[df_3k["label"] == "intron"])}")
-print(f"Total Len: {len(df_3k)}")
-
-df_3k.to_csv("datasets/ExInSeqs_3k.csv", index=False)
-
-# 30k -----------------------
-
-df_30k_small = pd.concat([df_exons_small.sample(n=15000), df_introns_small.sample(n=15000)])
-df_30k_small = df_30k_small.drop(columns=["flank_before_extended", "flank_after_extended"])
-
-df_30k_small = df_30k_small.sample(frac=1).reset_index(drop=True)
-print(f"Exons: {len(df_30k_small[df_30k_small["label"] == "exon"])}")
-print(f"Introns: {len(df_30k_small[df_30k_small["label"] == "intron"])}")
-print(f"Total Len: {len(df_30k_small)}")
-
-df_30k_small.to_csv("datasets/ExInSeqs_30k_small.csv", index=False)
-
-df_30k = pd.concat([df_exons.sample(n=15000), df_introns.sample(n=15000)])
-df_30k["flank_before"] = df_30k["flank_before_extended"]
-df_30k["flank_after"] = df_30k["flank_after_extended"]
-df_30k = df_30k.drop(columns=["flank_before_extended", "flank_after_extended"])
-
-df_30k = df_30k.sample(frac=1).reset_index(drop=True)
-print(f"Exons: {len(df_30k[df_30k["label"] == "exon"])}")
-print(f"Introns: {len(df_30k[df_30k["label"] == "intron"])}")
-print(f"Total Len: {len(df_30k)}")
-
-df_30k.to_csv("datasets/ExInSeqs_30k.csv", index=False)
-
-# 100k -----------------------
-
-df_100k_small = pd.concat([df_exons_small.sample(n=50000), df_introns_small.sample(n=50000)])
-df_100k_small = df_100k_small.drop(columns=["flank_before_extended", "flank_after_extended"])
-
-df_100k_small = df_100k_small.sample(frac=1).reset_index(drop=True)
-print(f"Exons: {len(df_100k_small[df_100k_small["label"] == "exon"])}")
-print(f"Introns: {len(df_100k_small[df_100k_small["label"] == "intron"])}")
-print(f"Total Len: {len(df_100k_small)}")
-
-df_100k_small.to_csv("datasets/ExInSeqs_100k_small.csv", index=False)
-
-df_100k = pd.concat([df_exons.sample(n=50000), df_introns.sample(n=50000)])
-df_100k["flank_before"] = df_100k["flank_before_extended"]
-df_100k["flank_after"] = df_100k["flank_after_extended"]
-df_100k = df_100k.drop(columns=["flank_before_extended", "flank_after_extended"])
-
-df_100k = df_100k.sample(frac=1).reset_index(drop=True)
-print(f"Exons: {len(df_100k[df_100k["label"] == "exon"])}")
-print(f"Introns: {len(df_100k[df_100k["label"] == "intron"])}")
-print(f"Total Len: {len(df_100k)}")
-
-df_100k.to_csv("datasets/ExInSeqs_100k.csv", index=False)
-
-# 6M -----------------------
-
-df_6M_small = pd.concat([df_exons_small.sample(n=3000000), df_introns_small.sample(n=3000000)])
-df_6M_small = df_6M_small.drop(columns=["flank_before_extended", "flank_after_extended"])
-
-df_6M_small = df_6M_small.sample(frac=1).reset_index(drop=True)
-print(f"Exons: {len(df_6M_small[df_6M_small["label"] == "exon"])}")
-print(f"Introns: {len(df_6M_small[df_6M_small["label"] == "intron"])}")
-print(f"Total Len: {len(df_6M_small)}")
-
-df_6M_small.to_csv("datasets/ExInSeqs_6M_small.csv", index=False)
-
-df_6M = pd.concat([df_exons.sample(n=3000000), df_introns.sample(n=3000000)])
-df_6M["flank_before"] = df_6M["flank_before_extended"]
-df_6M["flank_after"] = df_6M["flank_after_extended"]
-df_6M = df_6M.drop(columns=["flank_before_extended", "flank_after_extended"])
-
-df_6M = df_6M.sample(frac=1).reset_index(drop=True)
-print(f"Exons: {len(df_6M[df_6M["label"] == "exon"])}")
-print(f"Introns: {len(df_6M[df_6M["label"] == "intron"])}")
-print(f"Total Len: {len(df_6M)}")
-
-df_6M.to_csv("datasets/ExInSeqs_6M.csv", index=False)
+create_datasets(3000000, "ExInSeqs_3M")
+create_datasets(100000, "ExInSeqs_100k")
+create_datasets(30000, "ExInSeqs_30k")
+create_datasets(5000, "ExInSeqs_5k")
