@@ -7,26 +7,26 @@ gpt_models = ["gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl", "deepseek-ai/DeepS
 all_models = gpt_models + ["bert-base-uncased", "zhihan1996/DNA_bert_6"]
 
 config = {
-  "name": "gpt2-001",
+  "name": "bert-001",
   "checkpoint_default": True,
   "checkpoint_base": "gpt2",
   "checkpoint_to_load": None,
-  "train_dataset": "100k",
-  "train_percentage": 1.0,
-  "test_dataset": "30k",
   "dataset_version": "small",
-  "seed": 1234,
-  "batch_size": 8,
+  "train_dataset": "100k",
+  "test_dataset": "30k",
+  "train_percentage": 1.0,
+  "batch_size": 32,
   "hide_prob": 0.4,
   "lr": 5e-5,
-  "epochs": 3
+  "epochs": 3,
+  "seed": 1234
 }
 
 if config["checkpoint_base"] not in all_models:
   raise ValueError("Default Checkpoint Not Found")
-if config["train_dataset"] not in ["6M", "100k", "30k", "3k"]:
+if config["train_dataset"] not in ["5M", "100k", "30k", "3k"]:
   raise ValueError("Train Dataset Not Found")
-if config["test_dataset"] not in ["6M", "100k", "30k", "3k"]:
+if config["test_dataset"] not in ["5M", "100k", "30k", "3k"]:
   raise ValueError("Test Dataset Not Found")
 if config["dataset_version"] not in ["small", "normal"]:
   raise ValueError("Dataset Version Should be Small or Normal")
