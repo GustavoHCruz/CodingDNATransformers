@@ -44,8 +44,8 @@ def create_datasets(df_exons, df_introns, df_exons_small, df_introns_small, data
   
   return df_exons, df_introns, df_exons_small, df_introns_small
 
-dataset_sizes = [5000000, 100000, 30000, 5000]
-dataset_names = ["ExInSeqs_5M", "ExInSeqs_100k", "ExInSeqs_30k", "ExInSeqs_5k"]
+dataset_sizes = [5000000, 100000, 30000, 3000]
+dataset_names = ["ExInSeqs_5M", "ExInSeqs_100k", "ExInSeqs_30k", "ExInSeqs_3k"]
 
 for size, name in zip(dataset_sizes, dataset_names):
   df_exons, df_introns, df_exons_small, df_introns_small = create_datasets(

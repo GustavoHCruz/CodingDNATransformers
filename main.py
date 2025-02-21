@@ -7,19 +7,19 @@ gpt_models = ["gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl", "deepseek-ai/DeepS
 all_models = gpt_models + ["bert-base-uncased", "zhihan1996/DNA_bert_6"]
 
 config = {
-  "name": "bert-001",
+  "name": "gpt2-001",
   "checkpoint_default": True,
-  "checkpoint_base": "bert-base-uncased",
+  "checkpoint_base": "gpt2",
   "checkpoint_to_load": None,
-  "train_dataset": "6M",
+  "train_dataset": "100k",
   "train_percentage": 1.0,
-  "test_dataset": "3k",
+  "test_dataset": "30k",
   "dataset_version": "small",
   "seed": 1234,
-  "batch_size": 32,
+  "batch_size": 8,
   "hide_prob": 0.4,
   "lr": 5e-5,
-  "epochs": 5
+  "epochs": 3
 }
 
 if config["checkpoint_base"] not in all_models:

@@ -28,6 +28,8 @@ class SplicingTransformers(ABC):
 		self.notification = notification
 
 		self.model.to(self._device)
+
+		print(f"Started {checkpoint} model")
 	
 	def _get_next_model_dir(self):
 		os.makedirs(self.logs_dir, exist_ok=True)
