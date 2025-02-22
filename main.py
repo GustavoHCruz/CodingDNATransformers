@@ -9,7 +9,7 @@ all_models = gpt_models + ["bert-base-uncased", "zhihan1996/DNA_bert_6"]
 config = {
   "name": "bert-001",
   "checkpoint_default": True,
-  "checkpoint_base": "gpt2",
+  "checkpoint_base": "bert-base-uncased",
   "checkpoint_to_load": None,
   "dataset_version": "small",
   "train_dataset": "100k",
@@ -18,7 +18,7 @@ config = {
   "batch_size": 32,
   "hide_prob": 0.4,
   "lr": 5e-5,
-  "epochs": 3,
+  "epochs": 5,
   "seed": 1234
 }
 
