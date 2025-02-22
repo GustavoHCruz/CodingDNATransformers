@@ -1,7 +1,6 @@
 import random
 import time
 
-import numpy as np
 import torch
 from plyer import notification
 from torch.optim import AdamW
