@@ -4,7 +4,7 @@
   "checkpoint_base": "gpt2",
   "checkpoint_to_load": "None",
   "dataset_version": "small",
-  "train_dataset": "ExInSeqs_300k",
+  "train_dataset": "ExInSeqs_100k",
   "test_dataset": "ExInSeqs_30k",
   "train_percentage": 1.0,
   "batch_size": 8,
