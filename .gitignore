@@ -1,7 +1,7 @@
 *.gb
 *.csv
 /models
-/__pycache__
+__pycache__
 /cache
 /logs
 /.venv
