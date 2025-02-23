@@ -1,0 +1,14 @@
+{
+  "gpt": [
+    "gpt2",
+    "gpt2-medium",
+    "gpt2-large",
+    "gpt2-xl",
+    "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
+    "EleutherAI/gpt-neo-125M",
+    "EleutherAI/gpt-neo-1.3B",
+    "bigscience/bloom-560m"
+  ],
+  "bert": ["bert-base-uncased"],
+  "dnabert": ["zhihan1996/DNA_bert_6"]
+}
