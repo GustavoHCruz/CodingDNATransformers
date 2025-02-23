@@ -61,12 +61,14 @@ class SpliceGPT(SplicingTransformers):
 
 			return torch.tensor(input_ids), torch.tensor(labels)
 
-	def __init__(self, checkpoint="gpt2", device="cuda", seed=None, notification=False, logs_dir="logs", models_dir="models", alias=None):
+	def __init__(self, checkpoint="gpt2", device="cuda", seed=None, notification=False, logs_dir="logs", models_dir="models", alias=None, log_level="info"):
 		if seed:
 			self._set_seed(seed)
+		
+		self.log_level = log_level
 			
 		supported = ["gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl", "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B", "EleutherAI/gpt-neo-125M", "EleutherAI/gpt-neo-1.3B", "bigscience/bloom-560m"]
-		
+
 		if checkpoint not in supported:
 			self.load_checkpoint(checkpoint)
 		else:
@@ -195,7 +197,8 @@ class SpliceGPT(SplicingTransformers):
 			self.model.train()
 			train_loss = 0
 			
-			train_bar = tqdm(self.train_dataloader, desc=f"Training Epoch {epoch+1}/{epochs}", leave=True)
+			if self.log_level == "info":
+				train_bar = tqdm(self.train_dataloader, desc=f"Training Epoch {epoch+1}/{epochs}", leave=True)
 			for batch in self.train_dataloader:
 				self.optimizer.zero_grad()
 
@@ -207,20 +210,23 @@ class SpliceGPT(SplicingTransformers):
 				self.optimizer.step()
 				train_loss += loss.item()
 
-				train_bar.update(1)
-				train_bar.set_postfix(loss=train_loss/train_bar.n)
+				if self.log_level == "info":
+					train_bar.update(1)
+					train_bar.set_postfix(loss=train_loss/train_bar.n)
 	
 			train_loss /= len(self.train_dataloader)
+			if self.log_level == "info":
+				train_bar.set_postfix({"Loss": train_loss})
+				train_bar.close()
 			history["train_loss"].append(train_loss)
-			train_bar.set_postfix({"Loss": train_loss})
-			train_bar.close()
 
 			if evaluation:
 				best = False
 				self.model.eval()
 				eval_loss = 0
 
-				eval_bar = tqdm(self.eval_dataloader, desc="Validating", leave=True)
+				if self.log_level == "info":
+					eval_bar = tqdm(self.eval_dataloader, desc="Validating", leave=True)
 				with torch.no_grad():
 					for batch in self.eval_dataloader:
 						input_ids, attention_mask, labels = [b.to(self._device) for b in batch]
@@ -229,17 +235,19 @@ class SpliceGPT(SplicingTransformers):
 						loss = outputs.loss
 						eval_loss += loss.item()
 
-						eval_bar.update(1)
-						eval_bar.set_postfix({"Eval loss": eval_loss/eval_bar.n})
+						if self.log_level == "info":
+							eval_bar.update(1)
+							eval_bar.set_postfix({"Eval loss": eval_loss/eval_bar.n})
 
 				eval_loss /= len(self.eval_dataloader)
-				eval_bar.set_postfix({"Eval loss": eval_loss})
-				eval_bar.close()
+				if self.log_level == "info":
+					eval_bar.set_postfix({"Eval loss": eval_loss})
+					eval_bar.close()
 				history["eval_loss"].append(eval_loss)
 
 			history["epoch"].append(epoch)
 
-			if (epoch+1) % save_freq == 0:
+			if save_freq and (epoch+1) % save_freq == 0:
 				self._save_checkpoint(epoch=epoch)
 
 			if evaluation and eval_loss < best_eval_loss:
@@ -286,7 +294,8 @@ class SpliceGPT(SplicingTransformers):
 
 		self.model.eval()
 		with torch.no_grad():
-			eval_bar = tqdm(self.test_dataloader, desc="Evaluating", leave=True)
+			if self.log_level == "info":
+				eval_bar = tqdm(self.test_dataloader, desc="Evaluating", leave=True)
 			for batch in self.test_dataloader:
 				input_ids, attention_mask, labels = [b.to(self._device) for b in batch]
 
@@ -325,10 +334,12 @@ class SpliceGPT(SplicingTransformers):
 
 					total_samples += 1
 
-				eval_bar.update(1)
-				eval_bar.set_postfix(loss=total_loss/eval_bar.n)
+				if self.log_level == "info":
+					eval_bar.update(1)
+					eval_bar.set_postfix(loss=total_loss/eval_bar.n)
 
-		eval_bar.close()		
+		if self.log_level == "info":
+			eval_bar.close()		
 		avg_loss = total_loss / len(self.test_dataloader)
 		overall_accuracy = total_correct / total_samples if total_samples > 0 else 0.0
 		exon_accuracy = exon_correct / exon_total if exon_total > 0 else 0.0

@@ -1,5 +1,6 @@
 import pandas as pd
 
+from funcs.config_reading import read_datasets_configs
 from genbank_dataset_extraction import splicing_sites_extraction
 
 # splicing_sites_extraction("datasets/ExInSeqs.gb", "datasets/ExInSeqs_11M.csv")
@@ -8,11 +9,16 @@ df = pd.read_csv("datasets/ExInSeqs_11M.csv", keep_default_na=False)
 
 seed = 1234
 
+datasets_config = read_datasets_configs()
+
+dataset_sizes = [i["len"] for i in datasets_config["sizes"]]
+dataset_names = [i["name"] for i in datasets_config["sizes"]]
+
 shuffled_df = df.sample(frac=1, random_state=seed).reset_index(drop=True)
 df_exons = shuffled_df[shuffled_df["label"] == "exon"]
 df_introns = shuffled_df[shuffled_df["label"] == "intron"]
-df_exons_small = df_exons[df_exons["sequence"].str.len() < 128]
-df_introns_small = df_introns[df_introns["sequence"].str.len() < 128]
+df_exons_small = df_exons[df_exons["sequence"].str.len() < datasets_config["version"]["small"]["sequence_len"]]
+df_introns_small = df_introns[df_introns["sequence"].str.len() < datasets_config["version"]["normal"]["sequence_len"]]
 
 def create_datasets(df_exons, df_introns, df_exons_small, df_introns_small, dataset_len, csv_name, create_small_version=True, datasets_dir="datasets"):
   exons = df_exons.sample(n=int(dataset_len/2), random_state=seed)
@@ -43,9 +49,6 @@ def create_datasets(df_exons, df_introns, df_exons_small, df_introns_small, data
     df_small.to_csv(f"{datasets_dir}/{csv_name}_small.csv", index=False)
   
   return df_exons, df_introns, df_exons_small, df_introns_small
-
-dataset_sizes = [5000000, 100000, 30000, 3000]
-dataset_names = ["ExInSeqs_5M", "ExInSeqs_100k", "ExInSeqs_30k", "ExInSeqs_3k"]
 
 for size, name in zip(dataset_sizes, dataset_names):
   df_exons, df_introns, df_exons_small, df_introns_small = create_datasets(

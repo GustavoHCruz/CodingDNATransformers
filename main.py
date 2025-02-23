@@ -1,38 +1,26 @@
 import pandas as pd
 
-from BERT_based import SpliceBERT, SpliceDNABERT
+from BERT_based import SpliceBERT
+from DNABERT_based import SpliceDNABERT
+from funcs.config_reading import read_datasets_configs, read_experiment_configs
 from GPT_based import SpliceGPT
 
-gpt_models = ["gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl", "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B", "EleutherAI/gpt-neo-125M", "EleutherAI/gpt-neo-1.3B", "bigscience/bloom-560m"]
-all_models = gpt_models + ["bert-base-uncased", "zhihan1996/DNA_bert_6"]
+config = read_experiment_configs()
+datasets_config = read_datasets_configs()
 
-config = {
-  "name": "bert-001",
-  "checkpoint_default": True,
-  "checkpoint_base": "bert-base-uncased",
-  "checkpoint_to_load": None,
-  "dataset_version": "small",
-  "train_dataset": "100k",
-  "test_dataset": "30k",
-  "train_percentage": 1.0,
-  "batch_size": 32,
-  "hide_prob": 0.4,
-  "lr": 5e-5,
-  "epochs": 5,
-  "seed": 1234
-}
+dataset_names = [i["name"] for i in datasets_config["sizes"]]
 
-if config["checkpoint_base"] not in all_models:
+if config["checkpoint_base"] not in config["supported_models"]["all"]:
   raise ValueError("Default Checkpoint Not Found")
-if config["train_dataset"] not in ["5M", "100k", "30k", "3k"]:
+if config["train_dataset"] not in dataset_names:
   raise ValueError("Train Dataset Not Found")
-if config["test_dataset"] not in ["5M", "100k", "30k", "3k"]:
+if config["test_dataset"] not in dataset_names:
   raise ValueError("Test Dataset Not Found")
 if config["dataset_version"] not in ["small", "normal"]:
   raise ValueError("Dataset Version Should be Small or Normal")
 
-train_df_path = f"datasets/ExInSeqs_{config["train_dataset"]}"
-test_df_path = f"datasets/ExInSeqs_{config["test_dataset"]}"
+train_df_path = f"datasets/{config["train_dataset"]}"
+test_df_path = f"datasets/{config["test_dataset"]}"
 if config["dataset_version"] == "small":
   train_df_path += "_small.csv"
   test_df_path += "_small.csv"
@@ -57,22 +45,22 @@ test_gene = test_df.iloc[:, 3].tolist()
 test_flank_before = test_df.iloc[:, 4].tolist()
 test_flank_after = test_df.iloc[:, 5].tolist()
 
-sequence_len = 512
-flanks_len = 25
+sequence_len = datasets_config["version"]["normal"]["sequence_len"]
+flanks_len = datasets_config["version"]["normal"]["flanks"]
 if config["dataset_version"] == "small":
-  sequence_len = 128
-  flanks_len = 10
+  sequence_len = datasets_config["version"]["small"]["sequence_len"]
+  flanks_len = datasets_config["version"]["small"]["flanks"]
 
 model_to_use = config["checkpoint_base"]
 if not config["checkpoint_default"]:
   model_to_use = config["checkpoint_to_load"]
 
-if config["checkpoint_base"] in gpt_models:
-  model = SpliceGPT(model_to_use, seed=config["seed"], alias=config["name"])
+if config["checkpoint_base"] in config["supported_models"]["gpt"]:
+  model = SpliceGPT(model_to_use, seed=config["seed"], alias=config["model_name"], log_level=config["log_level"])
 elif config["checkpoint_base"] == "bert-base-uncased":
-  model = SpliceBERT(model_to_use, seed=config["seed"], alias=config["name"])
+  model = SpliceBERT(model_to_use, seed=config["seed"], alias=config["model_name"], log_level=config["log_level"])
 else:
-  model = SpliceDNABERT(model_to_use, seed=config["seed"], alias=config["name"])
+  model = SpliceDNABERT(model_to_use, seed=config["seed"], alias=config["model_name"], log_level=config["log_level"])
 
 data_config = {
   "flanks_len": flanks_len,
@@ -97,5 +85,5 @@ model.add_test_data({
   "flank_after": test_flank_after
 }, batch_size=config["batch_size"], sequence_len=sequence_len, data_config=data_config)
 
-model.train(lr=config["lr"], epochs=config["epochs"], save_at_end=True, evaluation=False, save_freq=1)
+model.train(lr=config["lr"], epochs=config["epochs"], save_at_end=True, evaluation=False, save_freq=0)
 model.evaluate()

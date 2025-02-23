@@ -19,7 +19,7 @@ class SplicingTransformers(ABC):
 		torch.backends.cudnn.deterministic = True
 		torch.backends.cudnn.benchmark = False
 	
-	def __init__(self, checkpoint, device="cuda", seed=None, notification=False, logs_dir="logs", models_dir="models", alias=None):
+	def __init__(self, checkpoint, device="cuda", seed=None, notification=False, logs_dir="logs", models_dir="models", alias=None, log_level="info"):
 		self._device = device
 		self.logs_dir = logs_dir
 		self.models_dir = models_dir
