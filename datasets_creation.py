@@ -1,11 +1,10 @@
 import pandas as pd
 
 from funcs.config_reading import read_datasets_configs
-from genbank_dataset_extraction import splicing_sites_extraction
 
-# splicing_sites_extraction("datasets/ExInSeqs.gb", "datasets/ExInSeqs_11M.csv")
+# splicing_sites_extraction("datasets/ExInSeqs.gb", "datasets/ExInSeqs.csv")
 
-df = pd.read_csv("datasets/ExInSeqs_11M.csv", keep_default_na=False)
+df = pd.read_csv("datasets/ExInSeqs.csv", keep_default_na=False)
 
 seed = 1234
 
