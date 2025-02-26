@@ -25,7 +25,15 @@ class RebuildSeqsGPT(SplicingTransformers):
 		def __init__(self, data, tokenizer):
 			self.data = data
 			self.tokenizer = tokenizer
-			self.max_length = 1024
+			
+			biggest_sequence = max(data["builded"])
+			tokenized = tokenizer.encode(biggest_sequence)
+
+			max_len = len(tokenized)
+			if max_len > 1024:
+				max_len = 1024
+
+			self.max_length = max_len
 
 		def __len__(self):
 			return len(self.data["sequence"])
