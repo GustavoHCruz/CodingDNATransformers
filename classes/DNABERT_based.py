@@ -75,12 +75,12 @@ class SpliceDNABERT(SplicingTransformers):
 		k_mers = [sequence[i:i+k] for i in range(0, len(sequence), k)]
 		return " ".join(k_mers)
 	
-	def _process_label(self, label):
+	def _process_target(self, label):
 		return 0 if label == "intron" else 1
 	
 	def _process_data(self, data):
 		data["sequence"] = [self._process_sequence(sequence) for sequence in data["sequence"]]
-		data["label"] = [self._process_label(label) for label in data["label"]]
+		data["label"] = [self._process_target(label) for label in data["label"]]
 
 		return data
 	

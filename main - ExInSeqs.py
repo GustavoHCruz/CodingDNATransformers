@@ -5,8 +5,8 @@ from classes.DNABERT_based import SpliceDNABERT
 from classes.GPT_based import SpliceGPT
 from funcs.config_reading import read_datasets_configs, read_experiment_configs
 
-config = read_experiment_configs()
-datasets_config = read_datasets_configs()
+config = read_experiment_configs("ExInSeqs")
+datasets_config = read_datasets_configs("ExInSeqs")
 
 dataset_names = [i["name"] for i in datasets_config["sizes"]]
 

@@ -1,4 +1,4 @@
-import random
+import re
 import time
 
 import torch
@@ -20,46 +20,27 @@ if in_notebook:
 else:
 	from tqdm import tqdm
 
-class SpliceGPT(SplicingTransformers):
-	class __SpliceGPTDataset__(Dataset):
-		def __init__(self, data, tokenizer, sequence_len, flanks_len, feat_hide_prob):
+class RebuildSeqsGPT(SplicingTransformers):
+	class __RebuildSeqsGPTDataset__(Dataset):
+		def __init__(self, data, tokenizer):
 			self.data = data
 			self.tokenizer = tokenizer
-			self.max_length = sequence_len + flanks_len * 2 + 80
-			self.feat_hide_prob = feat_hide_prob
+			self.max_length = 1024
 
 		def __len__(self):
 			return len(self.data["sequence"])
 		
 		def __getitem__(self, idx):
 			input_text = f"Sequence:{self.data['sequence'][idx]}\n"
+			input_text += f"Organism:{self.data["organism"][idx][:10]}\n"
+			input_text += "Marked Sequence:"
 
-			if len(self.data["organism"]) > idx and self.data["organism"][idx]:
-				if random.random() > self.feat_hide_prob:
-					input_text += f"Organism:{self.data["organism"][idx][:10]}\n"
-			
-			if len(self.data["gene"]) > idx and self.data["gene"][idx]:
-				if random.random() > self.feat_hide_prob:
-					input_text += f"Gene:{self.data["gene"][idx][:10]}\n"
-
-			if len(self.data["flank_before"]) > idx and self.data["flank_before"][idx]:
-				if random.random() > self.feat_hide_prob:
-					input_text += f"Flank Before:{self.data["flank_before"][idx]}\n"
-
-			if len(self.data["flank_after"]) > idx and self.data["flank_after"][idx]:
-				if random.random() > self.feat_hide_prob:
-					input_text += f"Flank After:{self.data["flank_after"][idx]}\n"
-			
-			input_text += "Answer:"
-			output_text = f"{self.data["label"][idx]}"
+			output_text = f"{self.data["builded"][idx]}"
 
 			input_ids = self.tokenizer.encode(input_text, truncation=True, max_length=self.max_length, add_special_tokens=True, padding=True)
-			label_ids = self.tokenizer.encode(output_text, truncation=True, max_length=self.max_length, add_special_tokens=False)
+			target_ids = self.tokenizer.encode(output_text, truncation=True, max_length=self.max_length, add_special_tokens=True, padding=True)
 
-			labels = [-100] * len(input_ids)
-			labels[-len(label_ids):] = label_ids
-
-			return torch.tensor(input_ids), torch.tensor(labels)
+			return torch.tensor(input_ids), torch.tensor(target_ids)
 
 	def __init__(self, checkpoint="gpt2", device="cuda", seed=None, notification=False, logs_dir="logs", models_dir="models", alias=None, log_level="info"):
 		if seed:
@@ -91,84 +72,73 @@ class SpliceGPT(SplicingTransformers):
 		self.tokenizer = AutoTokenizer.from_pretrained(path, padding_side="left")
 
 	def _collate_fn(self, batch):
-		input_ids, labels = zip(*batch)
-		input_ids_padded = torch.nn.utils.rnn.pad_sequence(input_ids, batch_first=True, padding_value=self.tokenizer.pad_token_id)
-		labels_padded = torch.nn.utils.rnn.pad_sequence(labels, batch_first=True, padding_value=-100)
+		input_ids, target_ids = zip(*batch)
+		
+		max_len = max(max(t.shape[0] for t in input_ids), max(t.shape[0] for t in target_ids))
+		
+		input_ids_padded = torch.stack([torch.nn.functional.pad(t, (0, max_len - t.shape[0]), value=self.tokenizer.pad_token_id) for t in input_ids])
+		
+		target_ids_padded = torch.stack([torch.nn.functional.pad(t, (0, max_len - t.shape[0]), value=self.tokenizer.pad_token_id) for t in target_ids])
+		
 		attention_mask = (input_ids_padded != self.tokenizer.pad_token_id).long()
-		return input_ids_padded, attention_mask, labels_padded
+
+		return input_ids_padded, attention_mask, target_ids_padded
+
 	
 	def _process_sequence(self, sequence):
 		return f"".join(f"[{nucl.upper()}]" for nucl in sequence)
-	
-	def _process_target(self, label):
-		return f"[{label.upper()}]"
-	
+
+	def _process_target(self, builded_sequence):
+		builded_sequence = re.sub(r"\(intron\)", "[INTRON]", builded_sequence, flags=re.IGNORECASE)
+		builded_sequence = re.sub(r"\(exon\)", "[EXON]", builded_sequence, flags=re.IGNORECASE)
+
+		def replace_nucleotides(match):
+			segment = match.group(0)
+			mapping = str.maketrans({"A": "[A]", "C": "[C]", "G": "[G]", "T": "[T]"})
+			return segment.translate(mapping)
+
+		pattern = r"(\[INTRON\]|\[EXON\])|([ACGT]+)"
+		builded_sequence = re.sub(pattern, lambda m: m.group(1) if m.group(1) else replace_nucleotides(m), builded_sequence)
+
+		return builded_sequence
+
 	def _process_data(self, data):
 		data["sequence"] = [self._process_sequence(sequence) for sequence in data["sequence"]]
-		data["label"] = [self._process_target(label) for label in data["label"]]
-		data["flank_before"] = [self._process_sequence(sequence) for sequence in data["flank_before"]]
-		data["flank_after"] = [self._process_sequence(sequence) for sequence in data["flank_after"]]
+		data["builded"] = [self._process_target(builded_sequence) for builded_sequence in data["builded"]]
 
 		return data
 
-	def add_train_data(self, data, batch_size=32, sequence_len=512, train_percentage=0.8, data_config=None):
-		flanks_len = 10
-		feat_hide_prob = 0.01
-		if hasattr(data_config, "flanks_len"):
-			flanks_len = data_config["flanks_len"]
-		if hasattr(data_config, "feat_hide_prob"):
-			feat_hide_prob = data_config["feat_hide_prob"]
-
+	def add_train_data(self, data, batch_size=32, sequence_len=512):
 		if sequence_len > 512:
 			raise ValueError("cannot support sequences_len higher than 512")
-		if flanks_len > 50:
-			raise ValueError("cannot support flanks_len higher than 50")
 
 		self._data_config = {
 			"sequence_len": sequence_len,
-			"flanks_len": flanks_len,
 			"batch_size": batch_size,
-			"feat_hide_prob": feat_hide_prob
 		}
 		
 		data = self._process_data(data)
 
-		dataset = self.__SpliceGPTDataset__(data, self.tokenizer, sequence_len=sequence_len, flanks_len=flanks_len, feat_hide_prob=feat_hide_prob)
+		dataset = self.__RebuildSeqsGPTDataset__(data, self.tokenizer)
 
-		if train_percentage == 1.0:
-			self.train_dataset = dataset
-		else:
-			total_size = len(dataset)
-			train_size = int(total_size * train_percentage)
-			eval_size = total_size - train_size
-			self.train_dataset, self.eval_dataset = random_split(dataset, [train_size, eval_size])
-			self.eval_dataloader = DataLoader(self.eval_dataset, batch_size=batch_size, shuffle=True, collate_fn=self._collate_fn)
+		self.train_dataset = dataset
 		
 		self.train_dataloader = DataLoader(self.train_dataset, batch_size=batch_size, shuffle=True, collate_fn=self._collate_fn)
 
-	def _check_test_compatibility(self, sequence_len, flanks_len, batch_size, feat_hide_prob):
+	def _check_test_compatibility(self, sequence_len, batch_size):
 		if hasattr(self, "_train_config"):
 			if self._train_config["sequence_len"] != sequence_len or \
-			self._train_config["flanks_len"] != flanks_len or \
-			self._train_config["batch_size"] != batch_size or \
-			self._train_config["feat_hide_prob"] != feat_hide_prob:
+			self._train_config["batch_size"] != batch_size:
 				print("Detected a different test dataloader configuration of the one used during training. This may lead to suboptimal results.")
 
-	def add_test_data(self, data, batch_size=32, sequence_len=512, data_config=None):
-		flanks_len = 10
-		feat_hide_prob = 0.01
-		if hasattr(data_config, "flanks_len"):
-			flanks_len = data_config["flanks_len"]
-		if hasattr(data_config, "feat_hide_prob"):
-			feat_hide_prob = data_config["feat_hide_prob"]
-
-		self._check_test_compatibility(sequence_len, flanks_len, batch_size, feat_hide_prob)
+	def add_test_data(self, data, batch_size=32, sequence_len=512):
+		self._check_test_compatibility(sequence_len, batch_size)
 		data = self._process_data(data)
 
-		self.test_dataset = self.__SpliceGPTDataset__(data, self.tokenizer, sequence_len=sequence_len, flanks_len=flanks_len, feat_hide_prob=feat_hide_prob)
+		self.test_dataset = self.__RebuildSeqsGPTDataset__(data, self.tokenizer)
 		self.test_dataloader = DataLoader(self.test_dataset, batch_size=batch_size, shuffle=True, collate_fn=self._collate_fn)
 
-	def train(self, lr=5e-4, epochs=3, evaluation=True, save_at_end=True, keep_best=False, save_freq=5):
+	def train(self, lr=5e-5, epochs=3, save_at_end=True, save_freq=5):
 		if not hasattr(self, "train_dataloader"):
 			raise ValueError("Cannot find the train dataloader, make sure you initialized it.")
 		
@@ -188,10 +158,6 @@ class SpliceGPT(SplicingTransformers):
 			})
 
 		history = {"epoch": [], "time": [], "train_loss": []}
-		if evaluation:
-			history.update({"eval_loss": []})
-
-		best_eval_loss = float("inf")
 
 		for epoch in range(epochs):
 			self.model.train()
@@ -202,8 +168,8 @@ class SpliceGPT(SplicingTransformers):
 			for batch in self.train_dataloader:
 				self.optimizer.zero_grad()
 
-				input_ids, attention_mask, labels = [b.to(self._device) for b in batch]
-				outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+				input_ids, attention_mask, target_ids = [b.to(self._device) for b in batch]
+				outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=target_ids)
 				
 				loss = outputs.loss
 				loss.backward()
@@ -219,51 +185,14 @@ class SpliceGPT(SplicingTransformers):
 				train_bar.set_postfix({"Loss": train_loss})
 				train_bar.close()
 			history["train_loss"].append(train_loss)
-
-			if evaluation:
-				best = False
-				self.model.eval()
-				eval_loss = 0
-
-				if self.log_level == "info":
-					eval_bar = tqdm(self.eval_dataloader, desc="Validating", leave=True)
-				with torch.no_grad():
-					for batch in self.eval_dataloader:
-						input_ids, attention_mask, labels = [b.to(self._device) for b in batch]
-						outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-
-						loss = outputs.loss
-						eval_loss += loss.item()
-
-						if self.log_level == "info":
-							eval_bar.update(1)
-							eval_bar.set_postfix({"Eval loss": eval_loss/eval_bar.n})
-
-				eval_loss /= len(self.eval_dataloader)
-				if self.log_level == "info":
-					eval_bar.set_postfix({"Eval loss": eval_loss})
-					eval_bar.close()
-				history["eval_loss"].append(eval_loss)
-
+		
 			history["epoch"].append(epoch)
 
 			if save_freq and (epoch+1) % save_freq == 0:
 				self._save_checkpoint(epoch=epoch)
-
-			if evaluation and eval_loss < best_eval_loss:
-				best = True
-				best_eval_loss = eval_loss
-				self._save_checkpoint()
 			
 			self.epoch_end_time = time.time()
 			history["time"].append(self.epoch_end_time - self.start_time)
-		
-		if keep_best:
-			if evaluation:
-				if not best:
-					self._load_checkpoint()
-			else:
-				print("Cannot load best because evaluation is setted off. To be able to restore the best model from the stored ones, please allow evaluation to execute with trainning.")
 
 		if self.notification:
 			notification.notify(title="Training complete", timeout=5)
@@ -287,19 +216,15 @@ class SpliceGPT(SplicingTransformers):
 		total_loss = 0
 		total_correct = 0
 		total_samples = 0
-		exon_correct = 0
-		exon_total = 0
-		intron_correct = 0
-		intron_total = 0
 
 		self.model.eval()
 		with torch.no_grad():
 			if self.log_level == "info":
 				eval_bar = tqdm(self.test_dataloader, desc="Evaluating", leave=True)
 			for batch in self.test_dataloader:
-				input_ids, attention_mask, labels = [b.to(self._device) for b in batch]
+				input_ids, attention_mask, target_ids = [b.to(self._device) for b in batch]
 
-				outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+				outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=target_ids)
 				loss = outputs.loss
 				total_loss += loss.item()
 
@@ -310,27 +235,17 @@ class SpliceGPT(SplicingTransformers):
 						input_ids=filtered_input.unsqueeze(0),
 						attention_mask=torch.tensor([1]*filtered_input.size(-1)).unsqueeze(0).to(self._device),
 						repetition_penalty=2.0,
-						max_new_tokens=1,
+						max_new_tokens=1024,
 						pad_token_id=self.tokenizer.eos_token_id
 					)
 
 					preds.append(prediction[0][filtered_input.size(-1)])
 
-				label_texts = [label[label != -100] for label in labels]
+				label_texts = [label[label != -100] for label in target_ids]
 
 				for pred, label in zip(preds, label_texts):
 					if pred == label:
 						total_correct += 1
-
-						if label.item() == self.exon_token[0]:
-							exon_correct += 1
-						else:
-							intron_correct += 1
-
-					if label.item() == self.exon_token[0]:
-						exon_total += 1
-					else:
-						intron_total += 1
 
 					total_samples += 1
 
@@ -342,20 +257,14 @@ class SpliceGPT(SplicingTransformers):
 			eval_bar.close()		
 		avg_loss = total_loss / len(self.test_dataloader)
 		overall_accuracy = total_correct / total_samples if total_samples > 0 else 0.0
-		exon_accuracy = exon_correct / exon_total if exon_total > 0 else 0.0
-		intron_accuracy = intron_correct / intron_total if intron_total > 0 else 0.0
 
 		print(f"Evaluation complete")
 		print(f"Average loss: {avg_loss:.4f}")
 		print(f"Overall Accuracy: {overall_accuracy:.4f}")
-		print(f"Exon accuracy: {exon_accuracy:.4f}")
-		print(f"Intron accuracy: {intron_accuracy:.4f}")
 
 		self._eval_results = {
 			"avg loss": avg_loss,
 			"overall accuracy": overall_accuracy,
-			"exon accuracy": exon_accuracy,
-			"intron accuracy": intron_accuracy
 		}
 
 		self._save_evaluation_results()
