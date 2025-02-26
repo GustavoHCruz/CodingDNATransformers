@@ -80,7 +80,7 @@ class SplicingTransformers(ABC):
 		pass
 
 	@abstractmethod
-	def _process_label(self, label):
+	def _process_target(self, label):
 		pass
 
 	@abstractmethod

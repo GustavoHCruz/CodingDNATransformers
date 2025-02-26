@@ -91,12 +91,12 @@ class SpliceBERT(SplicingTransformers):
 	def _process_sequence(self, sequence):
 		return f"".join(f"[{nucl.upper()}]" for nucl in sequence)
 	
-	def _process_label(self, label):
+	def _process_target(self, label):
 		return 0 if label == "intron" else 1
 	
 	def _process_data(self, data):
 		data["sequence"] = [self._process_sequence(sequence) for sequence in data["sequence"]]
-		data["label"] = [self._process_label(label) for label in data["label"]]
+		data["label"] = [self._process_target(label) for label in data["label"]]
 		data["flank_before"] = [self._process_sequence(sequence) for sequence in data["flank_before"]]
 		data["flank_after"] = [self._process_sequence(sequence) for sequence in data["flank_after"]]
 

@@ -1,30 +1,52 @@
 {
-  "sizes": [
-    {
-      "name": "ExInSeqs_5M",
-      "len": 5000000
-    },
-    {
-      "name": "ExInSeqs_100k",
-      "len": 100000
-    },
-    {
-      "name": "ExInSeqs_30k",
-      "len": 30000
-    },
-    {
-      "name": "ExInSeqs_3k",
-      "len": 3000
+  "ExInSeqs": {
+    "sizes": [
+      {
+        "name": "ExInSeqs_5M",
+        "len": 5000000
+      },
+      {
+        "name": "ExInSeqs_100k",
+        "len": 100000
+      },
+      {
+        "name": "ExInSeqs_30k",
+        "len": 30000
+      },
+      {
+        "name": "ExInSeqs_3k",
+        "len": 3000
+      }
+    ],
+    "version": {
+      "small": {
+        "sequence_len": 128,
+        "flanks": 10
+      },
+      "normal": {
+        "sequence_len": 512,
+        "flanks": 25
+      }
     }
-  ],
-  "version": {
-    "small": {
-      "sequence_len": 128,
-      "flanks": 10
-    },
-    "normal": {
-      "sequence_len": 512,
-      "flanks": 25
+  },
+  "RebuildSeqs": {
+    "sizes": [
+      {
+        "name": "RebuildSeqs_20k",
+        "len": 20000
+      },
+      {
+        "name": "RebuildSeqs_2k",
+        "len": 2000
+      }
+    ],
+    "version": {
+      "small": {
+        "sequence_len": 256
+      },
+      "normal": {
+        "sequence_len": 512
+      }
     }
   }
 }
