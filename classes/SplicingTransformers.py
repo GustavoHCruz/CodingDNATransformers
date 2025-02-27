@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 import pandas as pd
 import torch
+from transformers import set_seed
 
 
 class SplicingTransformers(ABC):
@@ -18,6 +19,7 @@ class SplicingTransformers(ABC):
 		torch.cuda.manual_seed_all(seed)
 		torch.backends.cudnn.deterministic = True
 		torch.backends.cudnn.benchmark = False
+		set_seed(seed)
 	
 	def __init__(self, checkpoint, device="cuda", seed=None, notification=False, logs_dir="logs", models_dir="models", alias=None, log_level="info"):
 		self._device = device
