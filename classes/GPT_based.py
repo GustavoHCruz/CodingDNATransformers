@@ -114,9 +114,9 @@ class SpliceGPT(SplicingTransformers):
 	def add_train_data(self, data, batch_size=32, sequence_len=512, train_percentage=0.8, data_config=None):
 		flanks_len = 10
 		feat_hide_prob = 0.01
-		if hasattr(data_config, "flanks_len"):
+		if "flanks_len" in data_config:
 			flanks_len = data_config["flanks_len"]
-		if hasattr(data_config, "feat_hide_prob"):
+		if "feat_hide_prob" in data_config:
 			feat_hide_prob = data_config["feat_hide_prob"]
 
 		if sequence_len > 512:
@@ -157,9 +157,9 @@ class SpliceGPT(SplicingTransformers):
 	def add_test_data(self, data, batch_size=32, sequence_len=512, data_config=None):
 		flanks_len = 10
 		feat_hide_prob = 0.01
-		if hasattr(data_config, "flanks_len"):
+		if "flanks_len" in data_config:
 			flanks_len = data_config["flanks_len"]
-		if hasattr(data_config, "feat_hide_prob"):
+		if "feat_hide_prob" in data_config:
 			feat_hide_prob = data_config["feat_hide_prob"]
 
 		self._check_test_compatibility(sequence_len, flanks_len, batch_size, feat_hide_prob)
