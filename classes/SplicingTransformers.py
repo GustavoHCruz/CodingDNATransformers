@@ -6,7 +6,6 @@ from abc import ABC, abstractmethod
 import numpy as np
 import pandas as pd
 import torch
-from transformers import set_seed
 
 
 class SplicingTransformers(ABC):
@@ -16,10 +15,13 @@ class SplicingTransformers(ABC):
 		np.random.seed(seed)
 		torch.manual_seed(seed)
 		torch.cuda.manual_seed(seed)
-		torch.cuda.manual_seed_all(seed)
+
 		torch.backends.cudnn.deterministic = True
 		torch.backends.cudnn.benchmark = False
-		set_seed(seed)
+		torch.use_deterministic_algorithms(True)
+
+		os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
+		os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 	
 	def __init__(self, checkpoint, device="cuda", seed=None, notification=False, logs_dir="logs", models_dir="models", alias=None, log_level="info"):
 		self._device = device
