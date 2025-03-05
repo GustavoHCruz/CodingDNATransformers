@@ -4,7 +4,7 @@ import time
 import torch
 from plyer import notification
 from torch.optim import AdamW
-from torch.utils.data import DataLoader, Dataset, random_split
+from torch.utils.data import DataLoader, Dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from classes.SplicingTransformers import SplicingTransformers
