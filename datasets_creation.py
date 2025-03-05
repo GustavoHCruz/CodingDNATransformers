@@ -9,14 +9,14 @@ from genbank_dataset_extraction import (sequence_rebuild_extraction,
 
 def create_ExInSeqs_dataset():
   if not os.path.exists("datasets/ExInSeqs.csv"):
-    if not os.path.exists("datasets/ExInSeqs.gb"):
-      raise ValueError("ExInSeqs.gb not found in datasets directory.")
-    splicing_sites_extraction("datasets/ExInSeqs.gb", "datasets/ExInSeqs.csv")
+    if not os.path.exists("datasets/SplicingSitesSeqs.gb"):
+      raise ValueError("SplicingSitesSeqs.gb not found in datasets directory.")
+    splicing_sites_extraction("datasets/SplicingSitesSeqs.gb", "datasets/ExInSeqs.csv")
   df = pd.read_csv("datasets/ExInSeqs.csv", keep_default_na=False)
 
   seed = 1234
 
-  datasets_config = read_datasets_configs()["ExInSeqs"]
+  datasets_config = read_datasets_configs("ExInSeqs")
 
   dataset_sizes = [i["len"] for i in datasets_config["sizes"]]
   dataset_names = [i["name"] for i in datasets_config["sizes"]]
@@ -64,14 +64,14 @@ def create_ExInSeqs_dataset():
 
 def create_RebuildSeqs_datasets():
   if not os.path.exists("datasets/RebuildSeqs.csv"):
-    if not os.path.exists("datasets/RebuildSeqs.gb"):
-      raise ValueError("RebuildSeqs.gb not found in datasets directory.")
-    sequence_rebuild_extraction("datasets/RebuildSeqs.gb", "datasets/RebuildSeqs.csv")
+    if not os.path.exists("datasets/SplicingSitesSeqs.gb"):
+      raise ValueError("SplicingSitesSeqs.gb not found in datasets directory.")
+    sequence_rebuild_extraction("datasets/SplicingSitesSeqs.gb", "datasets/RebuildSeqs.csv")
   df = pd.read_csv("datasets/RebuildSeqs.csv", keep_default_na=False)
 
   seed = 1234
 
-  datasets_config = read_datasets_configs()["RebuildSeqs"]
+  datasets_config = read_datasets_configs("RebuildSeqs")
 
   dataset_sizes = [i["len"] for i in datasets_config["sizes"]]
   dataset_names = [i["name"] for i in datasets_config["sizes"]]
@@ -100,3 +100,5 @@ def create_RebuildSeqs_datasets():
 
   for size, name in zip(dataset_sizes, dataset_names):
     normal_df, small_df = create_datasets(normal_df, small_df, size, name)
+
+create_RebuildSeqs_datasets()
