@@ -48,5 +48,21 @@
         "sequence_len": 512
       }
     }
+  },
+  "SWExInSeqs": {
+    "sizes": [
+      {
+        "name": "SWExIn_5k",
+        "len": 5000
+      },
+      {
+        "name": "SWExIn_50k",
+        "len": 50000
+      },
+      {
+        "name": "SWExIn_800k",
+        "len": 800000
+      }
+    ]
   }
 }

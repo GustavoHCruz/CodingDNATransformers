@@ -5,7 +5,7 @@ import torch
 from plyer import notification
 from torch.optim import AdamW
 from torch.utils.data import DataLoader, Dataset, random_split
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
+from transformers import BertForSequenceClassification, BertTokenizer
 
 from classes.SplicingTransformers import SplicingTransformers
 
@@ -20,43 +20,67 @@ if in_notebook:
 else:
 	from tqdm import tqdm
 
-class SpliceDNABERT(SplicingTransformers):
-	class __SpliceDNABERTDataset__(Dataset):
-		def __init__(self, data, tokenizer, max_length):
+class SWExInSeqsBERT(SplicingTransformers):
+	class __SWExInBERT__(Dataset):
+		def __init__(self, data, tokenizer, sequence_len, flanks_len, feat_hide_prob):
 			self.data = data
 			self.tokenizer = tokenizer
-			self.max_length = max_length
+			self.max_length = sequence_len + flanks_len * 2 + 100
+			self.feat_hide_prob = feat_hide_prob
 
 		def __len__(self):
 			return len(self.data["sequence"])
 		
 		def __getitem__(self, idx):
-			sequence = self.data['sequence'][idx]
+			prompt = f"Sequence:{self.data['sequence'][idx]}[SEP]"
 
-			input_ids = self.tokenizer.encode(sequence, max_length=self.max_length, padding=True, truncation=True)
+			if len(self.data["organism"]) > idx and self.data["organism"][idx]:
+				if random.random() > self.feat_hide_prob:
+					prompt += f"Organism:{self.data["organism"][idx][:20]}[SEP]"
+			
+			if len(self.data["gene"]) > idx and self.data["gene"][idx]:
+				if random.random() > self.feat_hide_prob:
+					prompt += f"Gene:{self.data["gene"][idx][:20]}[SEP]"
+
+			if len(self.data["flank_before"]) > idx and self.data["flank_before"][idx]:
+				if random.random() > self.feat_hide_prob:
+					prompt += f"Flank Before:{self.data["flank_before"][idx]}[SEP]"
+
+			if len(self.data["flank_after"]) > idx and self.data["flank_after"][idx]:
+				if random.random() > self.feat_hide_prob:
+					prompt += f"Flank After:{self.data["flank_after"][idx]}[SEP]"
+			
+			prompt += "Answer:"
+
+			input_ids = self.tokenizer.encode(prompt, max_length=self.max_length, padding=True, truncation=True)
 			label = self.data["label"][idx]
 
 			return torch.tensor(input_ids), torch.tensor(label)
 	
-	def __init__(self, checkpoint="zhihan1996/DNA_bert_6", device="cuda", seed=None, notification=False,  logs_dir="logs", models_dir="models", alias=None, log_level="info"):
+	def __init__(self, checkpoint="bert-base-uncased", device="cuda", seed=None, notification=False,  logs_dir="logs", models_dir="models", alias=None, log_level="info"):
 		if seed:
 			self._set_seed(seed)
-		
+
 		self.log_level = log_level
 
-		if checkpoint != "zhihan1996/DNA_bert_6":
+		if checkpoint != "bert-base-uncased":
 			self.load_checkpoint(checkpoint)
 		else:
-			self.model = AutoModelForSequenceClassification.from_pretrained(checkpoint, num_labels=2)
-			self.tokenizer = AutoTokenizer.from_pretrained(checkpoint)
+			self.model = BertForSequenceClassification.from_pretrained(checkpoint, num_labels=2)
+			self.tokenizer = BertTokenizer.from_pretrained(checkpoint, do_lower_case=False)
 		
+		if checkpoint == "bert-base-uncased":
+			special_tokens = ["[A]", "[C]", "[G]", "[T]", "[R]", "[Y]", "[S]", "[W]", "[K]", "[M]", "[B]", "[D]", "[H]", "[V]", "[N]"]
+			self.tokenizer.add_tokens(special_tokens)
+			self.model.resize_token_embeddings(len(self.tokenizer), mean_resizing=False)
+
 		self.intron_token = 0
 		self.exon_token = 1
 		super().__init__(checkpoint=checkpoint, device=device, seed=seed, notification=notification, logs_dir=logs_dir, models_dir=models_dir, alias=alias)
 		
 	def load_checkpoint(self, path):
-		self.model = AutoModelForSequenceClassification.from_pretrained(path)
-		self.tokenizer = AutoTokenizer.from_pretrained(path)
+		self.model = BertForSequenceClassification.from_pretrained(path)
+		self.tokenizer = BertTokenizer.from_pretrained(path)
 
 	def _collate_fn(self, batch):
 		input_ids, labels = zip(*batch)
@@ -65,15 +89,7 @@ class SpliceDNABERT(SplicingTransformers):
 		return input_ids_padded, attention_mask, torch.tensor(labels)
 	
 	def _process_sequence(self, sequence):
-		k = 6
-
-		remain = len(sequence) % k
-		if remain != 0:
-			padding_len = k - remain
-			sequence += 'N' * padding_len
-
-		k_mers = [sequence[i:i+k] for i in range(0, len(sequence), k)]
-		return " ".join(k_mers)
+		return f"".join(f"[{nucl.upper()}]" for nucl in sequence)
 	
 	def _process_target(self, label):
 		return 0 if label == "intron" else 1
@@ -81,18 +97,34 @@ class SpliceDNABERT(SplicingTransformers):
 	def _process_data(self, data):
 		data["sequence"] = [self._process_sequence(sequence) for sequence in data["sequence"]]
 		data["label"] = [self._process_target(label) for label in data["label"]]
+		data["flank_before"] = [self._process_sequence(sequence) for sequence in data["flank_before"]]
+		data["flank_after"] = [self._process_sequence(sequence) for sequence in data["flank_after"]]
 
 		return data
 	
-	def add_train_data(self, data, sequence_len=512, batch_size=32, train_percentage=0.8, data_config=None):
+	def add_train_data(self, data, batch_size=32, sequence_len=512, train_percentage=0.8, data_config=None):
+		flanks_len = 10
+		feat_hide_prob = 0.01
+		if "flanks_len" in data_config:
+			flanks_len = data_config["flanks_len"]
+		if "feat_hide_prob" in data_config:
+			feat_hide_prob = data_config["feat_hide_prob"]
+
 		if sequence_len > 512:
 			raise ValueError("cannot support sequences_len higher than 512")
+		if flanks_len > 50:
+			raise ValueError("cannot support flanks_len higher than 50")
 
-		self._data_config = {"sequence_len": sequence_len}
+		self._data_config = {
+			"sequence_len": sequence_len,
+			"flanks_len": flanks_len,
+			"batch_size": batch_size,
+			"feat_hide_prob": feat_hide_prob
+		}
 		
 		data = self._process_data(data)
 
-		dataset = self.__SpliceDNABERTDataset__(data, self.tokenizer, max_length=sequence_len)
+		dataset = self.__SpliceBERTDataset__(data, self.tokenizer, sequence_len=sequence_len, flanks_len=flanks_len, feat_hide_prob=feat_hide_prob)
 
 		if train_percentage == 1.0:
 			self.train_dataset = dataset
@@ -105,21 +137,30 @@ class SpliceDNABERT(SplicingTransformers):
 		
 		self.train_dataloader = DataLoader(self.train_dataset, batch_size=batch_size, shuffle=True, collate_fn=self._collate_fn)
 
-	def _check_test_compatibility(self, sequence_len, batch_size):
+	def _check_test_compatibility(self, sequence_len, flanks_len, batch_size, feat_hide_prob):
 		if hasattr(self, "_train_config"):
 			if self._train_config["sequence_len"] != sequence_len or \
-			self._train_config["batch_size"] != batch_size:
+			self._train_config["flanks_len"] != flanks_len or \
+			self._train_config["batch_size"] != batch_size or \
+			self._train_config["feat_hide_prob"] != feat_hide_prob:
 				print("Detected a different test dataloader configuration of the one used during training. This may lead to suboptimal results.")
 
 	def add_test_data(self, data, batch_size=32, sequence_len=512, data_config=None):
-		self._check_test_compatibility(sequence_len=sequence_len, batch_size=batch_size)
+		flanks_len = 10
+		feat_hide_prob = 0.01
+		if "flanks_len" in data_config:
+			flanks_len = data_config["flanks_len"]
+		if "feat_hide_prob" in data_config:
+			feat_hide_prob = data_config["feat_hide_prob"]
+
+		self._check_test_compatibility(sequence_len=sequence_len, flanks_len=flanks_len, batch_size=batch_size, feat_hide_prob=feat_hide_prob)
 
 		data = self._process_data(data)
 
-		self.test_dataset = self.__SpliceDNABERTDataset__(data, self.tokenizer, max_length=sequence_len)
+		self.test_dataset = self.__SpliceBERTDataset__(data, self.tokenizer, sequence_len=sequence_len, flanks_len=flanks_len, feat_hide_prob=feat_hide_prob)
 		self.test_dataloader = DataLoader(self.test_dataset, batch_size=batch_size, shuffle=True, collate_fn=self._collate_fn)
 
-	def train(self, lr=5e-5, epochs=3, evaluation=True, save_at_end=None, keep_best=False, save_freq=5):
+	def train(self, lr=2e-5, epochs=3, evaluation=True, save_at_end=None, keep_best=False, save_freq=5):
 		if not hasattr(self, "train_dataloader"):
 			raise ValueError("Cannot find the train dataloader, make sure you initialized it.")
 		
@@ -166,10 +207,10 @@ class SpliceDNABERT(SplicingTransformers):
 					train_bar.set_postfix({"Loss": train_loss/train_bar.n})
 
 			train_loss /= len(self.train_dataloader)
+			history["train_loss"].append(train_loss)
 			if self.log_level == "info":
 				train_bar.set_postfix({"Loss": train_loss})
 				train_bar.close()
-			history["train_loss"].append(train_loss)
 
 			if evaluation:
 				best = False
@@ -192,9 +233,8 @@ class SpliceDNABERT(SplicingTransformers):
 						correct_predictions += (predictions == labels).sum().item()
 						total_predictions += labels.size(0)
 
-						if self.log_level == "info":
-							eval_bar.update(1)
-							eval_bar.set_postfix({"Eval loss": eval_loss/eval_bar.n})
+						eval_bar.update(1)
+						eval_bar.set_postfix({"Eval loss": eval_loss/eval_bar.n})
 
 				eval_loss /= len(self.eval_dataloader)
 				eval_accuracy = correct_predictions / total_predictions
@@ -284,7 +324,7 @@ class SpliceDNABERT(SplicingTransformers):
 				if self.log_level == "info":
 					eval_bar.update(1)
 					eval_bar.set_postfix({"Eval loss": total_loss/eval_bar.n})
-		
+			
 		if self.log_level == "info":
 			eval_bar.close()
 		total_loss /= len(self.test_dataloader)
@@ -292,7 +332,8 @@ class SpliceDNABERT(SplicingTransformers):
 		exon_accuracy = exon_correct / exon_total if exon_total > 0 else 0.0
 		intron_accuracy = intron_correct / intron_total if intron_total > 0 else 0.0
 
-		print(f"Evaluation complete. Average loss: {total_loss:.4f}")
+		print(f"Evaluation complete")
+		print(f"Average loss: {total_loss:.4f}")
 		print(f"Overall Accuracy: {overall_accuracy:.4f}")
 		print(f"Exon accuracy: {exon_accuracy:.4f}")
 		print(f"Intron accuracy: {intron_accuracy:.4f}")
@@ -314,13 +355,21 @@ class SpliceDNABERT(SplicingTransformers):
 	
 	def predict_single(self, data, map_pred=True):
 		sequence = self._process_sequence(data["sequence"])
-		input_ids = self.tokenizer.encode(sequence, return_tensors="pt").to(self._device)
+		
+		keys = ["gene", "organism", "flank_before", "flank_after"]
+		prompt = f"Sequence: {sequence}\n"
+		for key in keys:
+			if hasattr(data, key):
+				prompt += f"{key.capitalize()}: {data[key]}\n"
+		prompt += "Answer: "
+
+		input_ids = self.tokenizer.encode(prompt, return_tensors="pt").to(self._device)
 
 		self.model.eval()
 		with torch.no_grad():
 			prediction = self.model(input_ids=input_ids)
 
 		if map_pred:
-			return self._prediction_mapping(prediction=prediction)
-
+			return self._prediction_mapping(prediction)
+		
 		return prediction

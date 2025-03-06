@@ -4,6 +4,7 @@ import pandas as pd
 
 from funcs.config_reading import read_datasets_configs
 from genbank_dataset_extraction import (sequence_rebuild_extraction,
+                                        sliding_window_extraction,
                                         splicing_sites_extraction)
 
 
@@ -102,3 +103,34 @@ def create_RebuildSeqs_datasets():
     normal_df, small_df = create_datasets(normal_df, small_df, size, name)
 
 create_RebuildSeqs_datasets()
+
+def create_SWExInSeqs_datasets():
+  if not os.path.exists("datasets/SWExInSeqs.csv"):
+    if not os.path.exists("datasets/SplicingSitesSeqs.gb"):
+      raise ValueError("SplicingSitesSeqs.gb not found in datasets directory.")
+    sliding_window_extraction("datasets/SplicingSitesSeqs.gb", "datasets/SWExInSeqs.csv")
+  df = pd.read_csv("datasets/SWExInSeqs.csv", keep_default_na=False)
+
+  seed = 1234
+
+  datasets_config = read_datasets_configs("SWExInSeqs")
+
+  dataset_sizes = [i["len"] for i in datasets_config["sizes"]]
+  dataset_names = [i["name"] for i in datasets_config["sizes"]]
+
+  shuffled_df = df.sample(frac=1, random_state=seed).reset_index(drop=True)
+  final_df = shuffled_df[df["sequence"].str.len() < datasets_config["version"]["normal"]["sequence_len"]]
+
+  def create_datasets(df, dataset_len, csv_name, datasets_dir="datasets"):
+    df = df.sample(n=int(dataset_len), random_state=seed)
+    
+    df = df.sample(frac=1, random_state=seed).reset_index(drop=True)
+
+    df.to_csv(f"{datasets_dir}/{csv_name}.csv", index=False)
+    
+    return df
+
+  for size, name in zip(dataset_sizes, dataset_names):
+    final_df = create_datasets(final_df, size, name)
+
+create_SWExInSeqs_datasets()
