@@ -285,3 +285,129 @@ def sequence_rebuild_extraction(genbank_file, csv_output_file, seq_max_len=512):
 	if new_reading:
 		df.loc[len(df)] = [genbank_file, record_counter]
 		df.to_csv(cache_file_path, index=False)
+
+def sliding_window_extraction(genbank_file, csv_output_file):
+	total_records = None
+
+	cache_file_path = "cache/genbank_files_len.csv"
+
+	if not os.path.isdir("cache"):
+		os.makedirs("cache")
+
+	new_reading = True
+	cache_file_status = os.path.isfile(cache_file_path)
+	if not cache_file_status:
+		df = pd.DataFrame({"gb_name": [], "total_records": []})
+	else:
+		df = pd.read_csv(cache_file_path)
+
+		filtered_index = df.index[df["gb_name"] == genbank_file]
+
+		if not filtered_index.empty:
+			total_records = df.at[filtered_index[0], "total_records"]
+			new_reading = False
+
+	data = []
+	record_counter = 0
+	accepted_records_counter = 0
+
+	if new_reading:
+		progress_bar = tqdm(bar_format="{desc}")
+	else:
+		progress_bar = tqdm(total=total_records, desc="File Scan Progress", leave=True)
+
+	with open(genbank_file, "r") as gb_file:
+		for record in SeqIO.parse(gb_file, "genbank"):
+			sequence = record.seq
+
+			if isinstance(record.seq._data, (_UndefinedSequenceData, _PartiallyDefinedSequenceData)):
+				record_counter += 1
+				if not new_reading:
+					progress_bar.update(1)
+				continue
+
+			organism = record.annotations.get("organism", "")
+
+			splicing_seq = []
+			strand_invalid = False
+			for feature in record.features:
+				if feature.type in ["intron", "exon"]:
+					location = feature.location
+			
+					strand = None
+					if hasattr(location, "strand"):
+						strand = location.strand
+					if strand is None:
+						strand_invalid = True
+						break
+
+					start = location.start
+					end = location.end
+					
+					if len(splicing_seq) == 0 and start > 0:
+						splicing_seq = ["U"] * start
+						
+					if feature.type == "intron":
+						splicing_seq += ["I"] * (end-start)
+					else:
+						splicing_seq += ["E"] * (end-start)
+
+			if strand_invalid:
+				record_counter += 1
+				if not new_reading:
+					progress_bar.update(1)
+				continue
+
+			rest = len(sequence) - len(splicing_seq)
+			if rest:
+				splicing_seq += ["U"] * rest
+
+			sequence = str(sequence) if strand == 1 else str(sequence.reverse_complement())
+
+			data.append({
+				"sequence": sequence,
+				"organism": organism,
+				"labeled_sequence": splicing_seq
+			})
+
+			accepted_records_counter += 1
+			record_counter += 1
+
+			if new_reading:
+				progress_bar.set_description_str(f"Records Scanned: {record_counter}")
+			else:
+				progress_bar.update(1)
+
+	print(f"Accepted Records: {accepted_records_counter}")
+
+	unique_records = set()
+	with open(csv_output_file, mode="w", newline="", encoding="utf-8") as csvfile:
+		fieldnames = ["sequence", "organism", "labeled_sequence"]
+
+		progress_bar = tqdm(total=len(data), desc="Writing CSV Progress", leave=True)
+
+		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+		writer.writeheader()
+
+		duplicated_counter = 0
+		counter = 0
+		for record in data:
+			record_tuple = tuple(record[field] for field in fieldnames)
+			record_hash = hash(record_tuple)
+			
+			if record_hash not in unique_records:
+				unique_records.add(record_hash)
+				writer.writerow(record)
+			else:
+				duplicated_counter += 1
+			counter += 1
+			
+			if counter % 1000 == 0:
+				progress_bar.update(1000)
+				progress_bar.set_postfix_str(f"{duplicated_counter} duplicated")
+		
+		progress_bar.update(counter % 1000)
+
+	if new_reading:
+		df.loc[len(df)] = [genbank_file, record_counter]
+		df.to_csv(cache_file_path, index=False)

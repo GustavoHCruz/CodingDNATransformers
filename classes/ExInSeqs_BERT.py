@@ -20,7 +20,7 @@ if in_notebook:
 else:
 	from tqdm import tqdm
 
-class SpliceBERT(SplicingTransformers):
+class ExInSeqsBERT(SplicingTransformers):
 	class __SpliceBERTDataset__(Dataset):
 		def __init__(self, data, tokenizer, sequence_len, flanks_len, feat_hide_prob):
 			self.data = data

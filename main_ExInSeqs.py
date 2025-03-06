@@ -1,8 +1,8 @@
 import pandas as pd
 
-from classes.BERT_based import SpliceBERT
-from classes.DNABERT_based import SpliceDNABERT
-from classes.GPT_based import SpliceGPT
+from classes.ExInSeqs_BERT import ExInSeqsBERT
+from classes.ExInSeqs_DNABERT import ExInSeqsDNABERT
+from classes.ExInSeqs_GPT import ExInSeqsGPT
 from funcs.config_reading import read_datasets_configs, read_experiment_configs
 
 config = read_experiment_configs("ExInSeqs")
@@ -56,11 +56,11 @@ if not config["checkpoint_default"]:
   model_to_use = config["checkpoint_to_load"]
 
 if config["checkpoint_base"] in config["supported_models"]["gpt"]:
-  model = SpliceGPT(model_to_use, seed=config["seed"], alias=config["model_name"], log_level=config["log_level"])
+  model = ExInSeqsGPT(model_to_use, seed=config["seed"], alias=config["model_name"], log_level=config["log_level"])
 elif config["checkpoint_base"] == "bert-base-uncased":
-  model = SpliceBERT(model_to_use, seed=config["seed"], alias=config["model_name"], log_level=config["log_level"])
+  model = ExInSeqsGPT(model_to_use, seed=config["seed"], alias=config["model_name"], log_level=config["log_level"])
 else:
-  model = SpliceDNABERT(model_to_use, seed=config["seed"], alias=config["model_name"], log_level=config["log_level"])
+  model = ExInSeqsDNABERT(model_to_use, seed=config["seed"], alias=config["model_name"], log_level=config["log_level"])
 
 data_config = {
   "flanks_len": flanks_len,
