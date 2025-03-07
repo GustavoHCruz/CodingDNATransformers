@@ -32,7 +32,7 @@ class ExInSeqsBERT(SplicingTransformers):
 			return len(self.data["sequence"])
 		
 		def __getitem__(self, idx):
-			prompt = f"Sequence:{self.data['sequence'][idx]}[SEP]"
+			prompt = f"Sequence:{self.data["sequence"][idx]}[SEP]"
 
 			if len(self.data["organism"]) > idx and self.data["organism"][idx]:
 				if random.random() > self.feat_hide_prob:

@@ -31,7 +31,7 @@ class ExInSeqsDNABERT(SplicingTransformers):
 			return len(self.data["sequence"])
 		
 		def __getitem__(self, idx):
-			sequence = self.data['sequence'][idx]
+			sequence = self.data["sequence"][idx]
 
 			input_ids = self.tokenizer.encode(sequence, max_length=self.max_length, padding=True, truncation=True)
 			label = self.data["label"][idx]

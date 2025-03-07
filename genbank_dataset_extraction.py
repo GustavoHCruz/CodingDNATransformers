@@ -328,7 +328,7 @@ def sliding_window_extraction(genbank_file, csv_output_file):
 
 			organism = record.annotations.get("organism", "")
 
-			splicing_seq = []
+			splicing_seq = ["U"] * len(sequence)
 			strand_invalid = False
 			for feature in record.features:
 				if feature.type in ["intron", "exon"]:
@@ -347,10 +347,8 @@ def sliding_window_extraction(genbank_file, csv_output_file):
 					if len(splicing_seq) == 0 and start > 0:
 						splicing_seq = ["U"] * start
 						
-					if feature.type == "intron":
-						splicing_seq += ["I"] * (end-start)
-					else:
-						splicing_seq += ["E"] * (end-start)
+					char = "I" if feature.type == "intron" else "E"
+					splicing_seq[start:end] = [char] * (end - start)
 
 			if strand_invalid:
 				record_counter += 1
@@ -367,7 +365,7 @@ def sliding_window_extraction(genbank_file, csv_output_file):
 			data.append({
 				"sequence": sequence,
 				"organism": organism,
-				"labeled_sequence": splicing_seq
+				"labeled_sequence": "".join(splicing_seq)
 			})
 
 			accepted_records_counter += 1
@@ -378,6 +376,7 @@ def sliding_window_extraction(genbank_file, csv_output_file):
 			else:
 				progress_bar.update(1)
 
+	progress_bar.close()
 	print(f"Accepted Records: {accepted_records_counter}")
 
 	unique_records = set()
@@ -408,6 +407,7 @@ def sliding_window_extraction(genbank_file, csv_output_file):
 		
 		progress_bar.update(counter % 1000)
 
+	progress_bar.close()
 	if new_reading:
 		df.loc[len(df)] = [genbank_file, record_counter]
 		df.to_csv(cache_file_path, index=False)
