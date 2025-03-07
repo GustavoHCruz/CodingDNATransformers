@@ -39,7 +39,7 @@ class RebuildSeqsGPT(SplicingTransformers):
 			return len(self.data["sequence"])
 		
 		def __getitem__(self, idx):
-			input_text = f"Sequence:{self.data['sequence'][idx]}\n"
+			input_text = f"Sequence:{self.data["sequence"][idx]}\n"
 			input_text += f"Organism:{self.data["organism"][idx][:10]}\n"
 			input_text += "Marked Sequence:"
 

@@ -52,16 +52,20 @@
   "SWExInSeqs": {
     "sizes": [
       {
-        "name": "SWExIn_5k",
-        "len": 5000
+        "name": "SWExIn_500",
+        "len": 500
       },
       {
-        "name": "SWExIn_50k",
-        "len": 50000
+        "name": "SWExIn_1k",
+        "len": 1000
       },
       {
-        "name": "SWExIn_800k",
-        "len": 800000
+        "name": "SWExIn_10k",
+        "len": 10000
+      },
+      {
+        "name": "SWExIn_100k",
+        "len": 100000
       }
     ]
   }

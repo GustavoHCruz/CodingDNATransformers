@@ -32,7 +32,7 @@ class ExInSeqsGPT(SplicingTransformers):
 			return len(self.data["sequence"])
 		
 		def __getitem__(self, idx):
-			input_text = f"Sequence:{self.data['sequence'][idx]}\n"
+			input_text = f"Sequence:{self.data["sequence"][idx]}\n"
 
 			if len(self.data["organism"]) > idx and self.data["organism"][idx]:
 				if random.random() > self.feat_hide_prob:
