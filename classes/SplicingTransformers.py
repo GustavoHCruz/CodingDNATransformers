@@ -23,7 +23,7 @@ class SplicingTransformers(ABC):
 		os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
 		os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 	
-	def __init__(self, checkpoint, device="cuda", seed=None, notification=False, logs_dir="logs", models_dir="models", alias=None, log_level="info"):
+	def __init__(self, checkpoint, device="cuda", seed=None, notification=False, logs_dir="logs", models_dir="models", alias=None, log_level="info", *args, **kargs):
 		self._device = device
 		self.logs_dir = logs_dir
 		self.models_dir = models_dir
@@ -84,7 +84,7 @@ class SplicingTransformers(ABC):
 		pass
 
 	@abstractmethod
-	def _process_target(self, label):
+	def _process_target(self, label, *args, **kargs):
 		pass
 
 	@abstractmethod
@@ -92,7 +92,7 @@ class SplicingTransformers(ABC):
 		pass
 
 	@abstractmethod
-	def add_train_data(self, data, batch_size, sequence_len, train_percentage, data_config):
+	def add_train_data(self, data, batch_size, train_percentage, data_config, *args, **kargs):
 		pass
 
 	@abstractmethod
@@ -100,7 +100,7 @@ class SplicingTransformers(ABC):
 		pass
 
 	@abstractmethod
-	def add_test_data(self, data, batch_size, sequence_len, data_config):
+	def add_test_data(self, data, batch_size, data_config, *args, **kargs):
 		pass
 	
 	def free_data(self, train=True, test=True):

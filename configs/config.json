@@ -28,5 +28,21 @@
     "epochs": 3,
     "seed": 1234,
     "log_level": "info"
+  },
+  "SWExInSeqs": {
+    "model_name": "SWExInSeqs-BERT-001",
+    "checkpoint_default": "True",
+    "checkpoint_base": "bert-base-uncased",
+    "checkpoint_to_load": "None",
+    "dataset_version": "small",
+    "train_dataset": "SWExIn_50",
+    "test_dataset": "SWExIn_50",
+    "batch_size": 16,
+    "window_size": 3,
+    "flank_size": 32,
+    "lr": 2e-5,
+    "epochs": 3,
+    "seed": 1234,
+    "log_level": "info"
   }
 }

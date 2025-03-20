@@ -118,17 +118,27 @@ def create_SWExInSeqs_datasets():
   dataset_sizes = [i["len"] for i in datasets_config["sizes"]]
   dataset_names = [i["name"] for i in datasets_config["sizes"]]
 
+  df = df[df["sequence"].str.len() < datasets_config["version"]["normal"]]
+  df_small = df[df["sequence"].str.len() < datasets_config["version"]["small"]]
   df = df.sample(frac=1, random_state=seed).reset_index(drop=True)
+  df_small = df_small.sample(frac=1, random_state=seed).reset_index(drop=True)
 
-  def create_datasets(original_df, dataset_len, csv_name, datasets_dir="datasets"):
+  def create_datasets(original_df, small_df, dataset_len, csv_name, datasets_dir="datasets"):
     new_df = original_df.sample(n=int(dataset_len), random_state=seed)
     original_df = original_df.drop(new_df.index)
     new_df = new_df.sample(frac=1, random_state=seed).reset_index(drop=True)
 
-    new_df.to_csv(f"{datasets_dir}/{csv_name}.csv", index=False)
+    new_small_df = small_df.sample(n=int(dataset_len), random_state=seed)
+    small_df = small_df.drop(new_small_df.index)
+    new_small_df = new_small_df.sample(frac=1, random_state=seed).reset_index(drop=True)
 
-    return original_df
+    new_df.to_csv(f"{datasets_dir}/{csv_name}.csv", index=False)
+    new_small_df.to_csv(f"{datasets_dir}/{csv_name}_small.csv", index=False)
+
+    return original_df, small_df
 
   for size, name in zip(dataset_sizes, dataset_names):
     print(f"Generating dataset {name} of size {size}")
-    df = create_datasets(df, size, name)
+    df, df_small = create_datasets(df, df_small, size, name)
+
+create_SWExInSeqs_datasets()
