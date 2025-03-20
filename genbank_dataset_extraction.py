@@ -286,7 +286,7 @@ def sequence_rebuild_extraction(genbank_file, csv_output_file, seq_max_len=512):
 		df.loc[len(df)] = [genbank_file, record_counter]
 		df.to_csv(cache_file_path, index=False)
 
-def sliding_window_extraction(genbank_file, csv_output_file):
+def sliding_window_extraction(genbank_file, csv_output_file, seq_max_len=256):
 	total_records = None
 
 	cache_file_path = "cache/genbank_files_len.csv"
@@ -320,7 +320,7 @@ def sliding_window_extraction(genbank_file, csv_output_file):
 		for record in SeqIO.parse(gb_file, "genbank"):
 			sequence = record.seq
 
-			if isinstance(record.seq._data, (_UndefinedSequenceData, _PartiallyDefinedSequenceData)):
+			if isinstance(record.seq._data, (_UndefinedSequenceData, _PartiallyDefinedSequenceData)) or len(sequence) > seq_max_len or len(sequence) < 3:
 				record_counter += 1
 				if not new_reading:
 					progress_bar.update(1)
