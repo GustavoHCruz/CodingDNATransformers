@@ -213,21 +213,25 @@ class SWExInSeqsBERT(SplicingTransformers):
 					train_bar.set_postfix({"Loss": train_loss/train_bar.n})
 
 			train_loss /= len(self.train_dataloader)
-			# history["train_loss"].append(train_loss)
+			history["train_loss"].append(train_loss)
 			if self.log_level == "info":
 				train_bar.set_postfix({"Loss": train_loss})
 				train_bar.close()
 
-			#if save_freq and (epoch+1) % save_freq == 0:
-				#self._save_checkpoint(epoch=epoch)
+			self.epoch_end_time = time.time()
+			history["time"].append(self.epoch_end_time - self.start_time)
+			history["epoch"].append(epoch)
+
+			if save_freq and (epoch+1) % save_freq == 0:
+				self._save_checkpoint(epoch=epoch)
 
 		if self.notification:
 			notification.notify(title="Training complete", timeout=5)
 
 		torch.cuda.empty_cache()
 
-		#self._save_history(history=history)
-		#self._save_config()
+		self._save_history(history=history)
+		self._save_config()
 
 		if save_at_end:
 			self.save_checkpoint()
