@@ -56,6 +56,10 @@
         "len": 50
       },
       {
+        "name": "SWExIn_200",
+        "len": 200
+      },
+      {
         "name": "SWExIn_500",
         "len": 500
       },
