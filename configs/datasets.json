@@ -10,40 +10,26 @@
         "flanks": 10
       }
     },
-    "genbank": [
+    "sizes": [
+      {
+        "name": "3k",
+        "length": 3000
+      },
+      {
+        "name": "30k",
+        "length": 30000
+      },
+      {
+        "name": "100k",
+        "length": 100000
+      },
+      {
+        "name": "500k",
+        "length": 500000
+      },
       {
         "name": "5M",
         "length": 5000000
-      },
-      {
-        "name": "100k",
-        "length": 100000
-      },
-      {
-        "name": "30k",
-        "length": 30000
-      },
-      {
-        "name": "3k",
-        "length": 3000
-      }
-    ],
-    "gencode": [
-      {
-        "name": "800k",
-        "length": 800000
-      },
-      {
-        "name": "100k",
-        "length": 100000
-      },
-      {
-        "name": "30k",
-        "length": 30000
-      },
-      {
-        "name": "3k",
-        "length": 3000
       }
     ]
   },
@@ -56,14 +42,14 @@
         "sequence_length": 256
       }
     },
-    "genbank": [
-      {
-        "name": "20k",
-        "length": 20000
-      },
+    "sizes": [
       {
         "name": "2k",
         "length": 2000
+      },
+      {
+        "name": "20k",
+        "length": 20000
       }
     ]
   },
@@ -76,7 +62,7 @@
         "sequence_length": 256
       }
     },
-    "genbank": [
+    "sizes": [
       {
         "name": "50",
         "length": 50
@@ -101,9 +87,14 @@
   },
   "ProteinSeqs": {
     "config": {
-      "sequence_length": 256
+      "default": {
+        "sequence_length": 256
+      },
+      "small": {
+        "sequence_length": 128
+      }
     },
-    "genbank": [
+    "sizes": [
       {
         "name": "3k",
         "length": 3000

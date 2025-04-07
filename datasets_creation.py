@@ -2,7 +2,7 @@ import os
 
 import pandas as pd
 
-from funcs.config_reading import read_datasets_configs
+from funcs.config_reading import read_config_file, read_datasets_configs
 from genbank_dataset_extraction import (sequence_rebuild_extraction,
                                         sliding_window_extraction,
                                         splicing_sites_extraction)
@@ -83,6 +83,9 @@ def create_ExInSeqs_dataset(source="genbank"):
   df_introns_small = df_introns[df_introns["sequence"].str.len() < datasets_config["version"]["normal"]["sequence_len"]]
 
   def create_datasets(df_exons, df_introns, df_exons_small, df_introns_small, dataset_len, csv_name, create_small_version=True, datasets_dir="datasets"):
+
+    # VALIDATE IF CAN BE CREATED (HAVE SUFFICIENT RESOURCES)
+
     exons = df_exons.sample(n=int(dataset_len/2), random_state=seed)
     introns = df_introns.sample(n=int(dataset_len/2), random_state=seed)
     df_exons = df_exons.drop(exons.index)

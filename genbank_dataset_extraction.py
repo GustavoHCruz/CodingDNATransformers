@@ -5,7 +5,7 @@ import pandas as pd
 from Bio import SeqIO
 from Bio.Seq import _PartiallyDefinedSequenceData, _UndefinedSequenceData
 
-from funcs.config_reading import read_datasets_configs
+from funcs.config_reading import read_config_file, read_datasets_configs
 
 try:
 	from IPython import get_ipython
@@ -18,12 +18,19 @@ if in_notebook:
 else:
 	from tqdm import tqdm
 
-def cache_initial_config(genbank_file):
-	cache_file_path = "cache/genbank_files_len.csv"
+config = read_config_file()
 
-	if not os.path.isdir("cache"):
-		os.makedirs("cache")
+dirs = ["datasets_raw_dir", "datasets_dir", "cache_dir"]
 
+for directory in dirs:
+	if not os.path.isdir(config[directory]):
+		os.makedirs(config[directory])
+
+genbank_file = f"{config["datasets_raw_dir"]}/{config["genbank_file"]}"
+
+cache_file_path = f"{config["cache_dir"]}/{config["cache_file"]}"
+
+def cache_initial_config():
 	total_records = None
 	cache_file_status = os.path.isfile(cache_file_path)
 	if not cache_file_status:
@@ -38,9 +45,7 @@ def cache_initial_config(genbank_file):
 	
 	return total_records, total_records == None
 
-def cache_save_config(genbank_file, record_counter):
-	cache_file_path = "cache/genbank_files_len.csv"
-
+def cache_save_config(record_counter):
 	df = pd.read_csv(cache_file_path)
 
 	df.loc[len(df)] = [genbank_file, record_counter]
@@ -75,14 +80,16 @@ def write_csv(csv_output_file, fieldnames, data):
 	
 	progress_bar.close()
 
-def splicing_sites_extraction(genbank_file, csv_output_file):
-	datasets_configs = read_datasets_configs("ExInSeqs", "genbank")
+def splicing_sites_extraction():
+	approach = "ExInSeqs"
+	csv_output_file = f"{config["datasets_dir"]}/{approach}_genbank.csv"
+	datasets_configs = read_datasets_configs(approach)
 
 	seq_max_len = datasets_configs["default"]["sequence_length"]
-	flank_len = datasets_configs["default"]["flanks"]
-	extended_flank_len = datasets_configs["small"]["flanks"]
+	default_flank_len = datasets_configs["default"]["flanks"]
+	flank_len_small = datasets_configs["small"]["flanks"]
 
-	total_records, new_reading = cache_initial_config(genbank_file=genbank_file)
+	total_records, new_reading = cache_initial_config()
 
 	data = []
 	record_counter = 0
@@ -121,8 +128,8 @@ def splicing_sites_extraction(genbank_file, csv_output_file):
 					
 					before = ""
 					before_extended = ""
-					start = location.start - flank_len
-					start_extended = location.start - extended_flank_len
+					start = location.start - flank_len_small
+					start_extended = location.start - default_flank_len
 					if start < 0:
 						start = 0
 					if start_extended < 0:
@@ -133,8 +140,8 @@ def splicing_sites_extraction(genbank_file, csv_output_file):
 
 					after = ""
 					after_extended = ""
-					end = location.end + flank_len
-					end_extended = location.end + extended_flank_len
+					end = location.end + flank_len_small
+					end_extended = location.end + default_flank_len
 					if end > len(sequence):
 						end = len(sequence)
 					if end_extended > len(sequence):
@@ -162,19 +169,23 @@ def splicing_sites_extraction(genbank_file, csv_output_file):
 				progress_bar.set_description_str(f"Records Scanned: {record_counter}")
 			else:
 				progress_bar.update(1)
+		
+	progress_bar.close()
 
 	fieldnames = ["sequence", "label", "organism", "gene", "flank_before", "flank_before_extended", "flank_after", "flank_after_extended"]
 	write_csv(csv_output_file=csv_output_file, fieldnames=fieldnames, data=data)
 
 	if new_reading:
-		cache_save_config(genbank_file=genbank_file, record_counter=record_counter)
+		cache_save_config(record_counter=record_counter)
 
-def sequence_rebuild_extraction(genbank_file, csv_output_file, seq_max_len=512):
-	datasets_configs = read_datasets_configs("RebuildSeqs", "genbank")
+def sequence_rebuild_extraction():
+	approach = "RebuilSeqs"
+	csv_output_file = f"{config["datasets_dir"]}/{approach}_genbank.csv"
+	datasets_configs = read_datasets_configs(approach)
 
 	seq_max_len = datasets_configs["default"]["sequence_length"]
 
-	total_records, new_reading = cache_initial_config(genbank_file=genbank_file)
+	total_records, new_reading = cache_initial_config()
 
 	data = []
 	record_counter = 0
@@ -255,16 +266,22 @@ def sequence_rebuild_extraction(genbank_file, csv_output_file, seq_max_len=512):
 
 	print(f"Accepted Records: {accepted_records_counter}")
 
+	progress_bar.close()
+
 	fieldnames = ["sequence", "builded", "organism"]
 	write_csv(csv_output_file=csv_output_file, fieldnames=fieldnames, data=data)
 
 	if new_reading:
-		cache_save_config(genbank_file=genbank_file, record_counter=record_counter)
+		cache_save_config(record_counter=record_counter)
 
-def sliding_window_extraction(genbank_file, csv_output_file, seq_max_len=256):
-	datasets_configs = read_datasets_configs("ExInSeqs", "genbank")
+def sliding_window_extraction():
+	approach = "SWExInSeqs"
+	csv_output_file = f"{config["datasets_dir"]}/{approach}_genbank.csv"
+	datasets_configs = read_datasets_configs(approach)
 
-	total_records, new_reading = cache_initial_config(genbank_file=genbank_file)
+	seq_max_len = datasets_configs["default"]["sequence_length"]
+
+	total_records, new_reading = cache_initial_config()
 
 	data = []
 	record_counter = 0
@@ -335,12 +352,73 @@ def sliding_window_extraction(genbank_file, csv_output_file, seq_max_len=256):
 			else:
 				progress_bar.update(1)
 
-	progress_bar.close()
 	print(f"Accepted Records: {accepted_records_counter}")
+
+	progress_bar.close()
 
 	fieldnames = ["sequence", "organism", "labeled_sequence"]
 	write_csv(csv_output_file=csv_output_file, fieldnames=fieldnames, data=data)
 
 	if new_reading:
-		df.loc[len(df)] = [genbank_file, record_counter]
-		df.to_csv(cache_file_path, index=False)
+		cache_save_config(record_counter=record_counter)
+
+def protein_extraction():
+	approach = "ProteinSeqs"
+	csv_output_file = f"{config["datasets_dir"]}/{approach}_genbank.csv"
+	datasets_configs = read_datasets_configs(approach)
+
+	seq_max_len = datasets_configs["default"]["sequence_length"]
+
+	total_records, new_reading = cache_initial_config()
+
+	data = []
+	record_counter = 0
+
+	if new_reading:
+		progress_bar = tqdm(bar_format="{desc}")
+	else:
+		progress_bar = tqdm(total=total_records, desc="File Scan Progress", leave=True)
+
+	with open(genbank_file, "r") as gb_file:
+		for record in SeqIO.parse(gb_file, "genbank"):
+			sequence = record.seq
+
+			if isinstance(record.seq._data, (_UndefinedSequenceData, _PartiallyDefinedSequenceData)) or len(sequence) > seq_max_len or len(sequence) < 3:
+				record_counter += 1
+				if not new_reading:
+					progress_bar.update(1)
+				continue
+
+			organism = record.annotations.get("organism", "")
+
+			allow = False
+			for feature in record.features:
+				if feature.type == "CDS":
+					allow = True
+					translation = feature.qualifiers.get("translation", None)
+					break
+			
+			if not allow or not translation:
+				record_counter += 1
+				continue
+
+			data.append({
+				"sequence": str(sequence),
+				"organism": str(organism),
+				"translation": str(translation[0])
+			})
+
+			record_counter += 1
+
+			if new_reading:
+				progress_bar.set_description_str(f"Records Scanned: {record_counter}")
+			else:
+				progress_bar.update(1)
+
+	progress_bar.close()
+
+	fieldnames = ["sequence", "organism", "translation"]
+	write_csv(csv_output_file=csv_output_file, fieldnames=fieldnames, data=data)
+
+	if new_reading:
+		cache_save_config(record_counter=record_counter)

@@ -1,0 +1,50 @@
+{
+  "ExInSeqs": {
+    "model_name": "ExInSeqs-BERT-001",
+    "checkpoint_default": "False",
+    "checkpoint_base": "bert-base-uncased",
+    "checkpoint_to_load": "SWExInSeqs-BERT-001_1",
+    "dataset_version": "small",
+    "dataset_source": "genbank",
+    "train_dataset": "ExInSeqs_30k_gencode",
+    "test_dataset": "ExInSeqs_3k_gencode",
+    "batch_size": 8,
+    "lr": 2e-5,
+    "epochs": 1,
+    "seed": 1234,
+    "log_level": "info",
+    "hide_prob": 0.4
+  },
+  "RebuildSeqs": {
+    "model_name": "RebuildSeqs-GPT2-001",
+    "checkpoint_default": "True",
+    "checkpoint_base": "gpt2",
+    "checkpoint_to_load": "None",
+    "dataset_version": "small",
+    "dataset_source": "genbank",
+    "train_dataset": "RebuildSeqs_20k",
+    "test_dataset": "RebuildSeqs_2k",
+    "batch_size": 8,
+    "lr": 5e-5,
+    "epochs": 3,
+    "seed": 1234,
+    "log_level": "info"
+  },
+  "SWExInSeqs": {
+    "model_name": "SWExInSeqs-BERT-001",
+    "checkpoint_default": "True",
+    "checkpoint_base": "bert-base-uncased",
+    "checkpoint_to_load": "None",
+    "dataset_version": "small",
+    "dataset_source": "genbank",
+    "train_dataset": "SWExIn_1k",
+    "test_dataset": "SWExIn_200",
+    "batch_size": 8,
+    "window_size": 3,
+    "flank_size": 128,
+    "lr": 1e-5,
+    "epochs": 3,
+    "seed": 1234,
+    "log_level": "info"
+  }
+}

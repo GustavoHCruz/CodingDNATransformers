@@ -11,5 +11,12 @@
   ],
   "bert": ["bert-base-uncased"],
   "dnabert": ["zhihan1996/DNA_bert_6"],
-  "t5": ["t5-small", "t5-base", "t5-large"]
+  "t5": [
+    "t5-small",
+    "t5-base",
+    "t5-large",
+    "flan-t5-small",
+    "flan-t5-base",
+    "flan-t5-large"
+  ]
 }
