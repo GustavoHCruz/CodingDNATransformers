@@ -8,11 +8,16 @@ datasets_config = read_datasets_configs("RebuildSeqs")
 
 dataset_names = [i["name"] for i in datasets_config["sizes"]]
 
-if config["checkpoint_base"] not in config["supported_models"]:
+train_dataset = config["train_dataset"]
+test_dataset = config["test_dataset"]
+
+if config["checkpoint_base"] not in config["supported_models"]["all"]:
   raise ValueError("Default Checkpoint Not Found")
-if config["train_dataset"] not in dataset_names:
+if train_dataset == None and test_dataset == None:
+  raise ValueError("Both datasets defined as 'None'")
+if train_dataset not in dataset_names and train_dataset != None:
   raise ValueError("Train Dataset Not Found")
-if config["test_dataset"] not in dataset_names:
+if test_dataset not in dataset_names and test_dataset != None:
   raise ValueError("Test Dataset Not Found")
 if config["dataset_version"] not in ["small", "normal"]:
   raise ValueError("Dataset Version Should be Small or Normal")
@@ -26,16 +31,19 @@ else:
   train_df_path += ".csv"
   test_df_path += ".csv"
 
-train_df = pd.read_csv(train_df_path, keep_default_na=False)
-test_df = pd.read_csv(test_df_path, keep_default_na=False)
+if train_dataset:
+  train_df = pd.read_csv(train_df_path, keep_default_na=False)
 
-train_sequence = train_df.iloc[:, 0].tolist()
-train_builded = train_df.iloc[:, 1].tolist()
-train_organism = train_df.iloc[:, 2].tolist()
+  train_sequence = train_df.iloc[:, 0].tolist()
+  train_builded = train_df.iloc[:, 1].tolist()
+  train_organism = train_df.iloc[:, 2].tolist()
 
-test_sequence = test_df.iloc[:, 0].tolist()
-test_builded = test_df.iloc[:, 1].tolist()
-test_organism = test_df.iloc[:, 2].tolist()
+if test_dataset:
+  test_df = pd.read_csv(test_df_path, keep_default_na=False)
+  
+  test_sequence = test_df.iloc[:, 0].tolist()
+  test_builded = test_df.iloc[:, 1].tolist()
+  test_organism = test_df.iloc[:, 2].tolist()
 
 sequence_len = datasets_config["version"]["normal"]["sequence_len"]
 if config["dataset_version"] == "small":

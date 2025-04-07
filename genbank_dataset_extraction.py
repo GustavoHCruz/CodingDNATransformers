@@ -18,6 +18,34 @@ if in_notebook:
 else:
 	from tqdm import tqdm
 
+def cache_initial_config(genbank_file):
+	cache_file_path = "cache/genbank_files_len.csv"
+
+	if not os.path.isdir("cache"):
+		os.makedirs("cache")
+
+	total_records = None
+	cache_file_status = os.path.isfile(cache_file_path)
+	if not cache_file_status:
+		df = pd.DataFrame({"gb_name": [], "total_records": []})
+	else:
+		df = pd.read_csv(cache_file_path)
+
+		filtered_index = df.index[df["gb_name"] == genbank_file]
+
+		if not filtered_index.empty:
+			total_records = df.at[filtered_index[0], "total_records"]
+	
+	return total_records, total_records == None
+
+def cache_save_config(genbank_file, record_counter):
+	cache_file_path = "cache/genbank_files_len.csv"
+
+	df = pd.read_csv(cache_file_path)
+
+	df.loc[len(df)] = [genbank_file, record_counter]
+	df.to_csv(cache_file_path, index=False)
+
 def write_csv(csv_output_file, fieldnames, data):
 	unique_records = set()
 	with open(csv_output_file, mode="w", newline="", encoding="utf-8") as csvfile:
@@ -50,28 +78,11 @@ def write_csv(csv_output_file, fieldnames, data):
 def splicing_sites_extraction(genbank_file, csv_output_file):
 	datasets_configs = read_datasets_configs("ExInSeqs", "genbank")
 
-	seq_max_len = datasets_configs["version"]["default"]["sequence_length"]
-	flank_len = datasets_configs["version"]["small"]["flanks"]
-	flank_extended_len = datasets_configs["version"]["default"]["flanks"]
-	total_records = None
+	seq_max_len = datasets_configs["default"]["sequence_length"]
+	flank_len = datasets_configs["default"]["flanks"]
+	extended_flank_len = datasets_configs["small"]["flanks"]
 
-	cache_file_path = "cache/genbank_files_len.csv"
-
-	if not os.path.isdir("cache"):
-		os.makedirs("cache")
-
-	new_reading = True
-	cache_file_status = os.path.isfile(cache_file_path)
-	if not cache_file_status:
-		df = pd.DataFrame({"gb_name": [], "total_records": []})
-	else:
-		df = pd.read_csv(cache_file_path)
-
-		filtered_index = df.index[df["gb_name"] == genbank_file]
-
-		if not filtered_index.empty:
-			total_records = df.at[filtered_index[0], "total_records"]
-			new_reading = False
+	total_records, new_reading = cache_initial_config(genbank_file=genbank_file)
 
 	data = []
 	record_counter = 0
@@ -111,7 +122,7 @@ def splicing_sites_extraction(genbank_file, csv_output_file):
 					before = ""
 					before_extended = ""
 					start = location.start - flank_len
-					start_extended = location.start - flank_extended_len
+					start_extended = location.start - extended_flank_len
 					if start < 0:
 						start = 0
 					if start_extended < 0:
@@ -123,7 +134,7 @@ def splicing_sites_extraction(genbank_file, csv_output_file):
 					after = ""
 					after_extended = ""
 					end = location.end + flank_len
-					end_extended = location.end + flank_extended_len
+					end_extended = location.end + extended_flank_len
 					if end > len(sequence):
 						end = len(sequence)
 					if end_extended > len(sequence):
@@ -156,29 +167,14 @@ def splicing_sites_extraction(genbank_file, csv_output_file):
 	write_csv(csv_output_file=csv_output_file, fieldnames=fieldnames, data=data)
 
 	if new_reading:
-		df.loc[len(df)] = [genbank_file, record_counter]
-		df.to_csv(cache_file_path, index=False)
+		cache_save_config(genbank_file=genbank_file, record_counter=record_counter)
 
 def sequence_rebuild_extraction(genbank_file, csv_output_file, seq_max_len=512):
-	total_records = None
+	datasets_configs = read_datasets_configs("RebuildSeqs", "genbank")
 
-	cache_file_path = "cache/genbank_files_len.csv"
+	seq_max_len = datasets_configs["default"]["sequence_length"]
 
-	if not os.path.isdir("cache"):
-		os.makedirs("cache")
-
-	new_reading = True
-	cache_file_status = os.path.isfile(cache_file_path)
-	if not cache_file_status:
-		df = pd.DataFrame({"gb_name": [], "total_records": []})
-	else:
-		df = pd.read_csv(cache_file_path)
-
-		filtered_index = df.index[df["gb_name"] == genbank_file]
-
-		if not filtered_index.empty:
-			total_records = df.at[filtered_index[0], "total_records"]
-			new_reading = False
+	total_records, new_reading = cache_initial_config(genbank_file=genbank_file)
 
 	data = []
 	record_counter = 0
@@ -263,29 +259,12 @@ def sequence_rebuild_extraction(genbank_file, csv_output_file, seq_max_len=512):
 	write_csv(csv_output_file=csv_output_file, fieldnames=fieldnames, data=data)
 
 	if new_reading:
-		df.loc[len(df)] = [genbank_file, record_counter]
-		df.to_csv(cache_file_path, index=False)
+		cache_save_config(genbank_file=genbank_file, record_counter=record_counter)
 
 def sliding_window_extraction(genbank_file, csv_output_file, seq_max_len=256):
-	total_records = None
+	datasets_configs = read_datasets_configs("ExInSeqs", "genbank")
 
-	cache_file_path = "cache/genbank_files_len.csv"
-
-	if not os.path.isdir("cache"):
-		os.makedirs("cache")
-
-	new_reading = True
-	cache_file_status = os.path.isfile(cache_file_path)
-	if not cache_file_status:
-		df = pd.DataFrame({"gb_name": [], "total_records": []})
-	else:
-		df = pd.read_csv(cache_file_path)
-
-		filtered_index = df.index[df["gb_name"] == genbank_file]
-
-		if not filtered_index.empty:
-			total_records = df.at[filtered_index[0], "total_records"]
-			new_reading = False
+	total_records, new_reading = cache_initial_config(genbank_file=genbank_file)
 
 	data = []
 	record_counter = 0
@@ -359,35 +338,9 @@ def sliding_window_extraction(genbank_file, csv_output_file, seq_max_len=256):
 	progress_bar.close()
 	print(f"Accepted Records: {accepted_records_counter}")
 
-	unique_records = set()
-	with open(csv_output_file, mode="w", newline="", encoding="utf-8") as csvfile:
-		fieldnames = ["sequence", "organism", "labeled_sequence"]
+	fieldnames = ["sequence", "organism", "labeled_sequence"]
+	write_csv(csv_output_file=csv_output_file, fieldnames=fieldnames, data=data)
 
-		progress_bar = tqdm(total=len(data), desc="Writing CSV Progress", leave=True)
-
-		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-		writer.writeheader()
-
-		duplicated_counter = 0
-		counter = 0
-		for record in data:
-			record_tuple = tuple(record[field] for field in fieldnames)
-			record_hash = hash(record_tuple)
-			
-			if record_hash not in unique_records:
-				unique_records.add(record_hash)
-				writer.writerow(record)
-			else:
-				duplicated_counter += 1
-			counter += 1
-			
-			if counter % 1000 == 0:
-				progress_bar.update(1000)
-				progress_bar.set_postfix_str(f"{duplicated_counter} duplicated")
-		
-		progress_bar.update(counter % 1000)
-
-	progress_bar.close()
 	if new_reading:
 		df.loc[len(df)] = [genbank_file, record_counter]
 		df.to_csv(cache_file_path, index=False)
