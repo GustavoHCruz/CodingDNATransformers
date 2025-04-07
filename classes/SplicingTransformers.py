@@ -92,7 +92,7 @@ class SplicingTransformers(ABC):
 		pass
 
 	@abstractmethod
-	def add_train_data(self, data, batch_size, train_percentage, data_config, *args, **kargs):
+	def add_train_data(self, data, batch_size, data_config, *args, **kargs):
 		pass
 
 	@abstractmethod
@@ -145,7 +145,7 @@ class SplicingTransformers(ABC):
 			json.dump(self._train_config, f, indent=2)
 	
 	@abstractmethod
-	def train(self, lr, epochs, evaluation, save_at_end, keep_best, save_freq):
+	def train(self, lr, epochs, save_at_end, save_freq):
 		pass
 
 	def _save_evaluation_results(self):

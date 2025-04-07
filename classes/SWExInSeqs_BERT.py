@@ -170,7 +170,7 @@ class SWExInSeqsBERT(SplicingTransformers):
 		self.test_dataset = self.__SWExInBERT__(data, self.tokenizer, window_size=self.window_size, flank_size=flank_size)
 		self.test_dataloader = DataLoader(self.test_dataset, batch_size=batch_size, shuffle=True, collate_fn=self._collate_fn)
 
-	def train(self, lr=2e-5, epochs=3, save_at_end=None, save_freq=5):
+	def train(self, lr=2e-5, epochs=3, save_at_end=True, save_freq=5):
 		if not hasattr(self, "train_dataloader"):
 			raise ValueError("Cannot find the train dataloader, make sure you initialized it.")
 		

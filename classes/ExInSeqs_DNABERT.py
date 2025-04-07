@@ -84,7 +84,7 @@ class ExInSeqsDNABERT(SplicingTransformers):
 
 		return data
 	
-	def add_train_data(self, data, sequence_len=512, batch_size=32, train_percentage=0.8, data_config=None):
+	def add_train_data(self, data, sequence_len=512, batch_size=32, data_config=None):
 		if sequence_len > 512:
 			raise ValueError("cannot support sequences_len higher than 512")
 
@@ -94,15 +94,7 @@ class ExInSeqsDNABERT(SplicingTransformers):
 
 		dataset = self.__SpliceDNABERTDataset__(data, self.tokenizer, max_length=sequence_len)
 
-		if train_percentage == 1.0:
-			self.train_dataset = dataset
-		else:
-			total_size = len(dataset)
-			train_size = int(total_size * train_percentage)
-			eval_size = total_size - train_size
-			self.train_dataset, self.eval_dataset = random_split(dataset, [train_size, eval_size])
-			self.eval_dataloader = DataLoader(self.eval_dataset, batch_size=batch_size, shuffle=True, collate_fn=self._collate_fn)
-		
+		self.train_dataset = dataset
 		self.train_dataloader = DataLoader(self.train_dataset, batch_size=batch_size, shuffle=True, collate_fn=self._collate_fn)
 
 	def _check_test_compatibility(self, sequence_len, batch_size):
@@ -119,7 +111,7 @@ class ExInSeqsDNABERT(SplicingTransformers):
 		self.test_dataset = self.__SpliceDNABERTDataset__(data, self.tokenizer, max_length=sequence_len)
 		self.test_dataloader = DataLoader(self.test_dataset, batch_size=batch_size, shuffle=True, collate_fn=self._collate_fn)
 
-	def train(self, lr=5e-5, epochs=3, evaluation=True, save_at_end=None, keep_best=False, save_freq=5):
+	def train(self, lr=5e-5, epochs=3, save_at_end=True, save_freq=5):
 		if not hasattr(self, "train_dataloader"):
 			raise ValueError("Cannot find the train dataloader, make sure you initialized it.")
 		
@@ -139,10 +131,6 @@ class ExInSeqsDNABERT(SplicingTransformers):
 			})
 
 		history = {"epoch": [], "time": [], "train_loss": []}
-		if evaluation:
-			history.update({"eval_loss": [], "eval_accuracy": []})
-
-		best_eval_loss = float("inf")
 
 		for epoch in range(epochs):
 			self.model.train()
@@ -171,59 +159,13 @@ class ExInSeqsDNABERT(SplicingTransformers):
 				train_bar.close()
 			history["train_loss"].append(train_loss)
 
-			if evaluation:
-				best = False
-				self.model.eval()
-				eval_loss = 0
-				correct_predictions = 0
-				total_predictions = 0
-
-				if self.log_level == "info":
-					eval_bar = tqdm(self.eval_dataloader, desc="Validating", leave=True)
-				with torch.no_grad():
-					for batch in self.eval_dataloader:
-						input_ids, attention_mask, labels = [b.to(self._device) for b in batch]
-						outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-
-						loss = outputs.loss
-						eval_loss += loss.item()
-
-						predictions = torch.argmax(outputs.logits, dim=-1)
-						correct_predictions += (predictions == labels).sum().item()
-						total_predictions += labels.size(0)
-
-						if self.log_level == "info":
-							eval_bar.update(1)
-							eval_bar.set_postfix({"Eval loss": eval_loss/eval_bar.n})
-
-				eval_loss /= len(self.eval_dataloader)
-				eval_accuracy = correct_predictions / total_predictions
-				if self.log_level == "info":
-					eval_bar.set_postfix({"Eval loss": eval_loss, "Eval Accuracy": eval_accuracy})
-					eval_bar.close()
-				history["eval_loss"].append(eval_loss)
-				history["eval_accuracy"].append(eval_accuracy)
-
 			history["epoch"].append(epoch)
 
 			if save_freq and (epoch+1) % save_freq == 0:
 				self._save_checkpoint(epoch=epoch)
 
-			if evaluation and eval_loss < best_eval_loss:
-				best = True
-				best_eval_loss = eval_loss
-				self._save_checkpoint()
-			
 			self.epoch_end_time = time.time()
 			history["time"].append(self.epoch_end_time - self.start_time)
-
-		if keep_best:
-			if evaluation:
-				if not best:
-					self._load_checkpoint()
-			
-			else:
-				print("Cannot load best because evaluation is setted off. To be able to restore the best model from the stored ones, please allow evaluation to execute with trainning. ")
 
 		if self.notification:
 			notification.notify(title="Training complete", timeout=5)

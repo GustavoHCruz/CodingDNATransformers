@@ -22,10 +22,10 @@ else:
 
 class ExInSeqsBERT(SplicingTransformers):
 	class __SpliceBERTDataset__(Dataset):
-		def __init__(self, data, tokenizer, sequence_len, flanks_len, feat_hide_prob):
+		def __init__(self, data, tokenizer, sequence_len, flanks_size, feat_hide_prob):
 			self.data = data
 			self.tokenizer = tokenizer
-			self.max_length = sequence_len + flanks_len * 2 + 100
+			self.max_length = sequence_len + flanks_size * 2 + 100
 			self.feat_hide_prob = feat_hide_prob
 
 		def __len__(self):
@@ -102,65 +102,57 @@ class ExInSeqsBERT(SplicingTransformers):
 
 		return data
 	
-	def add_train_data(self, data, batch_size=32, sequence_len=512, train_percentage=0.8, data_config=None):
-		flanks_len = 10
+	def add_train_data(self, data, batch_size=32, sequence_len=512, data_config=None):
+		flanks_size = 10
 		feat_hide_prob = 0.01
-		if "flanks_len" in data_config:
-			flanks_len = data_config["flanks_len"]
+		if "flanks_size" in data_config:
+			flanks_size = data_config["flanks_size"]
 		if "feat_hide_prob" in data_config:
 			feat_hide_prob = data_config["feat_hide_prob"]
 
 		if sequence_len > 512:
 			raise ValueError("cannot support sequences_len higher than 512")
-		if flanks_len > 50:
-			raise ValueError("cannot support flanks_len higher than 50")
+		if flanks_size > 50:
+			raise ValueError("cannot support flanks_size higher than 50")
 
 		self._data_config = {
 			"sequence_len": sequence_len,
-			"flanks_len": flanks_len,
+			"flanks_size": flanks_size,
 			"batch_size": batch_size,
 			"feat_hide_prob": feat_hide_prob
 		}
 		
 		data = self._process_data(data)
 
-		dataset = self.__SpliceBERTDataset__(data, self.tokenizer, sequence_len=sequence_len, flanks_len=flanks_len, feat_hide_prob=feat_hide_prob)
+		dataset = self.__SpliceBERTDataset__(data, self.tokenizer, sequence_len=sequence_len, flanks_size=flanks_size, feat_hide_prob=feat_hide_prob)
 
-		if train_percentage == 1.0:
-			self.train_dataset = dataset
-		else:
-			total_size = len(dataset)
-			train_size = int(total_size * train_percentage)
-			eval_size = total_size - train_size
-			self.train_dataset, self.eval_dataset = random_split(dataset, [train_size, eval_size])
-			self.eval_dataloader = DataLoader(self.eval_dataset, batch_size=batch_size, shuffle=True, collate_fn=self._collate_fn)
-		
+		self.train_dataset = dataset
 		self.train_dataloader = DataLoader(self.train_dataset, batch_size=batch_size, shuffle=True, collate_fn=self._collate_fn)
 
-	def _check_test_compatibility(self, sequence_len, flanks_len, batch_size, feat_hide_prob):
+	def _check_test_compatibility(self, sequence_len, flanks_size, batch_size, feat_hide_prob):
 		if hasattr(self, "_train_config"):
 			if self._train_config["sequence_len"] != sequence_len or \
-			self._train_config["flanks_len"] != flanks_len or \
+			self._train_config["flanks_size"] != flanks_size or \
 			self._train_config["batch_size"] != batch_size or \
 			self._train_config["feat_hide_prob"] != feat_hide_prob:
 				print("Detected a different test dataloader configuration of the one used during training. This may lead to suboptimal results.")
 
 	def add_test_data(self, data, batch_size=32, sequence_len=512, data_config=None):
-		flanks_len = 10
+		flanks_size = 10
 		feat_hide_prob = 0.01
-		if "flanks_len" in data_config:
-			flanks_len = data_config["flanks_len"]
+		if "flanks_size" in data_config:
+			flanks_size = data_config["flanks_size"]
 		if "feat_hide_prob" in data_config:
 			feat_hide_prob = data_config["feat_hide_prob"]
 
-		self._check_test_compatibility(sequence_len=sequence_len, flanks_len=flanks_len, batch_size=batch_size, feat_hide_prob=feat_hide_prob)
+		self._check_test_compatibility(sequence_len=sequence_len, flanks_size=flanks_size, batch_size=batch_size, feat_hide_prob=feat_hide_prob)
 
 		data = self._process_data(data)
 
-		self.test_dataset = self.__SpliceBERTDataset__(data, self.tokenizer, sequence_len=sequence_len, flanks_len=flanks_len, feat_hide_prob=feat_hide_prob)
+		self.test_dataset = self.__SpliceBERTDataset__(data, self.tokenizer, sequence_len=sequence_len, flanks_size=flanks_size, feat_hide_prob=feat_hide_prob)
 		self.test_dataloader = DataLoader(self.test_dataset, batch_size=batch_size, shuffle=True, collate_fn=self._collate_fn)
 
-	def train(self, lr=2e-5, epochs=3, evaluation=True, save_at_end=None, keep_best=False, save_freq=5):
+	def train(self, lr=2e-5, epochs=3, save_at_end=True, save_freq=5):
 		if not hasattr(self, "train_dataloader"):
 			raise ValueError("Cannot find the train dataloader, make sure you initialized it.")
 		
@@ -180,10 +172,6 @@ class ExInSeqsBERT(SplicingTransformers):
 			})
 
 		history = {"epoch": [], "time": [], "train_loss": []}
-		if evaluation:
-			history.update({"eval_loss": [], "eval_accuracy": []})
-
-		best_eval_loss = float("inf")
 
 		for epoch in range(epochs):
 			self.model.train()
@@ -212,58 +200,13 @@ class ExInSeqsBERT(SplicingTransformers):
 				train_bar.set_postfix({"Loss": train_loss})
 				train_bar.close()
 
-			if evaluation:
-				best = False
-				self.model.eval()
-				eval_loss = 0
-				correct_predictions = 0
-				total_predictions = 0
-
-				if self.log_level == "info":
-					eval_bar = tqdm(self.eval_dataloader, desc="Validating", leave=True)
-				with torch.no_grad():
-					for batch in self.eval_dataloader:
-						input_ids, attention_mask, labels = [b.to(self._device) for b in batch]
-						outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-
-						loss = outputs.loss
-						eval_loss += loss.item()
-
-						predictions = torch.argmax(outputs.logits, dim=-1)
-						correct_predictions += (predictions == labels).sum().item()
-						total_predictions += labels.size(0)
-
-						eval_bar.update(1)
-						eval_bar.set_postfix({"Eval loss": eval_loss/eval_bar.n})
-
-				eval_loss /= len(self.eval_dataloader)
-				eval_accuracy = correct_predictions / total_predictions
-				if self.log_level == "info":
-					eval_bar.set_postfix({"Eval loss": eval_loss, "Eval Accuracy": eval_accuracy})
-					eval_bar.close()
-				history["eval_loss"].append(eval_loss)
-				history["eval_accuracy"].append(eval_accuracy)
-
 			history["epoch"].append(epoch)
 
 			if save_freq and (epoch+1) % save_freq == 0:
 				self._save_checkpoint(epoch=epoch)
 
-			if evaluation and eval_loss < best_eval_loss:
-				best = True
-				best_eval_loss = eval_loss
-				self._save_checkpoint()
-			
 			self.epoch_end_time = time.time()
 			history["time"].append(self.epoch_end_time - self.start_time)
-
-		if keep_best:
-			if evaluation:
-				if not best:
-					self._load_checkpoint()
-			
-			else:
-				print("Cannot load best because evaluation is setted off. To be able to restore the best model from the stored ones, please allow evaluation to execute with trainning. ")
 
 		if self.notification:
 			notification.notify(title="Training complete", timeout=5)

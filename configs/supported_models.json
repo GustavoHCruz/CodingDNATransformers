@@ -10,5 +10,6 @@
     "bigscience/bloom-560m"
   ],
   "bert": ["bert-base-uncased"],
-  "dnabert": ["zhihan1996/DNA_bert_6"]
+  "dnabert": ["zhihan1996/DNA_bert_6"],
+  "t5": ["t5-small", "t5-base", "t5-large"]
 }

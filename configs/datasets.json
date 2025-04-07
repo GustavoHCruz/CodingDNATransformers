@@ -1,80 +1,202 @@
 {
   "ExInSeqs": {
-    "sizes": [
-      {
-        "name": "ExInSeqs_5M",
-        "len": 5000000
+    "genbank": {
+      "default": {
+        "sequence_length": 512,
+        "flanks": 25,
+        "sizes": [
+          {
+            "name": "5M",
+            "length": 5000000
+          },
+          {
+            "name": "100k",
+            "length": 100000
+          },
+          {
+            "name": "30k",
+            "length": 30000
+          },
+          {
+            "name": "3k",
+            "length": 3000
+          }
+        ]
       },
-      {
-        "name": "ExInSeqs_100k",
-        "len": 100000
-      },
-      {
-        "name": "ExInSeqs_30k",
-        "len": 30000
-      },
-      {
-        "name": "ExInSeqs_3k",
-        "len": 3000
-      }
-    ],
-    "version": {
       "small": {
-        "sequence_len": 128,
-        "flanks": 10
+        "sequence_length": 128,
+        "flanks": 10,
+        "sizes": [
+          {
+            "name": "5M",
+            "length": 5000000
+          },
+          {
+            "name": "100k",
+            "length": 100000
+          },
+          {
+            "name": "30k",
+            "length": 30000
+          },
+          {
+            "name": "3k",
+            "length": 3000
+          }
+        ]
+      }
+    },
+    "gencode": {
+      "default": {
+        "sequence_length": 512,
+        "flanks": 25,
+        "sizes": [
+          {
+            "name": "800k",
+            "length": 800000
+          },
+          {
+            "name": "100k",
+            "length": 100000
+          },
+          {
+            "name": "30k",
+            "length": 30000
+          },
+          {
+            "name": "3k",
+            "length": 3000
+          }
+        ]
       },
-      "normal": {
-        "sequence_len": 512,
-        "flanks": 25
+      "small": {
+        "sequence_length": 128,
+        "flanks": 10,
+        "sizes": [
+          {
+            "name": "300k",
+            "length": 300000
+          },
+          {
+            "name": "100k",
+            "length": 100000
+          },
+          {
+            "name": "30k",
+            "length": 30000
+          },
+          {
+            "name": "3k",
+            "length": 3000
+          }
+        ]
       }
     }
   },
   "RebuildSeqs": {
-    "sizes": [
-      {
-        "name": "RebuildSeqs_20k",
-        "len": 20000
+    "genbank": {
+      "default": {
+        "sequence_length": 512,
+        "sizes": [
+          {
+            "name": "20k",
+            "length": 20000
+          },
+          {
+            "name": "2k",
+            "length": 2000
+          }
+        ]
       },
-      {
-        "name": "RebuildSeqs_2k",
-        "len": 2000
-      }
-    ],
-    "version": {
       "small": {
-        "sequence_len": 256
-      },
-      "normal": {
-        "sequence_len": 512
+        "sequence_length": 256,
+        "sizes": [
+          {
+            "name": "20k",
+            "length": 20000
+          },
+          {
+            "name": "2k",
+            "length": 2000
+          }
+        ]
       }
     }
   },
   "SWExInSeqs": {
-    "sizes": [
-      {
-        "name": "SWExIn_50",
-        "len": 50
+    "genbank": {
+      "default": {
+        "sequence_length": 512,
+        "sizes": [
+          {
+            "name": "50",
+            "length": 50
+          },
+          {
+            "name": "200",
+            "length": 200
+          },
+          {
+            "name": "500",
+            "length": 500
+          },
+          {
+            "name": "1k",
+            "length": 1000
+          },
+          {
+            "name": "10k",
+            "length": 10000
+          }
+        ]
       },
-      {
-        "name": "SWExIn_200",
-        "len": 200
-      },
-      {
-        "name": "SWExIn_500",
-        "len": 500
-      },
-      {
-        "name": "SWExIn_1k",
-        "len": 1000
-      },
-      {
-        "name": "SWExIn_10k",
-        "len": 10000
+      "small": {
+        "sequence_length": 256,
+        "sizes": [
+          {
+            "name": "50",
+            "length": 50
+          },
+          {
+            "name": "200",
+            "length": 200
+          },
+          {
+            "name": "500",
+            "length": 500
+          },
+          {
+            "name": "1k",
+            "length": 1000
+          },
+          {
+            "name": "10k",
+            "length": 10000
+          }
+        ]
       }
-    ],
-    "version": {
-      "small": 256,
-      "normal": 512
+    }
+  },
+  "ProteinSeqs": {
+    "genbank": {
+      "default": {
+        "sequence_length": 256,
+        "sizes": [
+          {
+            "name": "3k",
+            "length": 3000
+          },
+          {
+            "name": "30k",
+            "length": 30000
+          }
+        ]
+      }
+    },
+    "gencode": {
+      "default": {
+        "sequence_length": 256
+      }
     }
   }
 }
