@@ -1,6 +1,37 @@
 import json
 
 
+def read_config_file():
+	expected_attr = {
+		"datasets_raw_dir": str,
+		"datasets_dir": str,
+		"cache_dir": str,
+		"cache_file": str,
+		"genbank_file": str,
+		"gencode_file_annotations": str,
+		"gencode_file_genome": str,
+		"genbank_cache_file": str
+	}
+
+	with open("configs/config.json", "r") as file:
+		data = json.load(file)
+
+	for key, expected_type in expected_attr.items():
+		if key not in data:
+			raise ValueError(f"Missing key: {key}")
+			
+		if not isinstance(data[key], expected_type):
+			raise TypeError(f"Incorrect type for {key}: Expected {expected_type.__name__}, but got {type(data[key]).__name__}")
+			
+		response = {}
+		
+		for key, expected_type in expected_attr.items():
+			response.update({
+				key: expected_type(data[key])
+			})
+
+		return response
+
 def read_supported_models():
 	with open("configs/supported_models.json", "r") as file:
 		supported_models = json.load(file)
@@ -30,7 +61,7 @@ def read_experiment_configs(approach):
 		"ProteinSeqs": dict,
 	}
 
-	with open("configs/config.json", "r") as file:
+	with open("configs/experiment_config.json", "r") as file:
 		data = json.load(file)
 	
 	if approach not in approachs.keys():
@@ -110,12 +141,14 @@ def read_datasets_configs(approach):
 	if not configs_attr:
 		raise ValueError(f"Missing key: 'config' in datasets configuration file")
 	
+	data = data["config"]
+	
 	expected_attr = {
 		"default": dict,
 		"small": dict
 	}
 
-	for key, expected_version in expected_attr.item():
+	for key, expected_version in expected_attr.items():
 		if key not in data:
 			raise ValueError(f"missing key: {key}")
 		if not isinstance(data[key], expected_version):
@@ -136,7 +169,6 @@ def read_datasets_configs(approach):
 
 def read_datasets_sizes(approach):
 	approachs = ["ExInSeqs", "RebuildSeqs", "SWExInSeqs", "ProteinSeqs"]
-	sources = ["genbank", "gencode"]
 
 	with open("configs/datasets.json", "r") as file:
 		data = json.load(file)
@@ -146,19 +178,17 @@ def read_datasets_sizes(approach):
 
 	data = data[approach]
 
-	for key in sources:
-		if key not in data:
-			raise ValueError(f"missing key: {key}")
+	sizes = data.get("sizes", None)
 
-	for dataset in sources:
-		sizes = data[dataset]
-		
-		for item in sizes:
-			if not isinstance(item, dict):
-					raise TypeError(f"Each item in 'sizes' must be a dict, but got {type(item).__name__}")
-			if "name" not in item or "length" not in item:
-				raise ValueError("Each item in 'sizes' must contain 'name' and 'length' keys")
-			if not isinstance(item["name"], str):
-				raise TypeError(f"Incorrect type for 'name': Expected str, but got {type(item['name']).__name__}")
-			if not isinstance(item["length"], int):
-				raise TypeError(f"Incorrect type for 'len': Expected int, but got {type(item['length']).__name__}")
+	if not sizes:
+		raise ValueError(f"missing key: 'sizes'")
+
+	for item in sizes:
+		if not isinstance(item, dict):
+				raise TypeError(f"Each item in 'sizes' must be a dict, but got {type(item).__name__}")
+		if "name" not in item or "length" not in item:
+			raise ValueError("Each item in 'sizes' must contain 'name' and 'length' keys")
+		if not isinstance(item["name"], str):
+			raise TypeError(f"Incorrect type for 'name': Expected str, but got {type(item['name']).__name__}")
+		if not isinstance(item["length"], int):
+			raise TypeError(f"Incorrect type for 'len': Expected int, but got {type(item['length']).__name__}")
