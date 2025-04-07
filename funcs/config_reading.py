@@ -94,8 +94,48 @@ def read_experiment_configs(approach):
 
 			return response
 	
-def read_datasets_configs(approach, source):
-	approachs = ["ExInSeqs", "RebuildSeqs", "SWExInSeqs"]
+def read_datasets_configs(approach):
+	approachs = ["ExInSeqs", "RebuildSeqs", "SWExInSeqs", "ProteinSeqs"]
+
+	with open("configs/datasets.json", "r") as file:
+		data = json.load(file)
+
+	if approach not in approachs:
+		raise ValueError(f"Key {approach} not found on approachs.")
+
+	data = data[approach]
+
+	configs_attr = data.get("config", None)
+
+	if not configs_attr:
+		raise ValueError(f"Missing key: 'config' in datasets configuration file")
+	
+	expected_attr = {
+		"default": dict,
+		"small": dict
+	}
+
+	for key, expected_version in expected_attr.item():
+		if key not in data:
+			raise ValueError(f"missing key: {key}")
+		if not isinstance(data[key], expected_version):
+			raise TypeError(f"Incorrect type for '{key}': Expected {expected_version.__name__}, but got {type(data[key]).__name__}")
+		
+	configs = ["sequence_length"]
+	if approach == "ExInSeqs" or approach == "SWExInSeqs":
+		configs.append("flanks")
+
+	for version in expected_attr.keys():
+		target = configs_attr[version]
+
+		for key in configs:
+			if key not in target:
+				raise ValueError(f"missing key: {key}")
+
+	return data
+
+def read_datasets_sizes(approach):
+	approachs = ["ExInSeqs", "RebuildSeqs", "SWExInSeqs", "ProteinSeqs"]
 	sources = ["genbank", "gencode"]
 
 	with open("configs/datasets.json", "r") as file:
@@ -106,38 +146,19 @@ def read_datasets_configs(approach, source):
 
 	data = data[approach]
 
-	if source not in sources:
-		raise ValueError(f"Key {source} not found on sources.")
-
-	data = data[source]
-
-	expected_versions = {
-		"default": dict,
-		"small": dict
-	}
-
-	for key, expected_version in expected_versions.item():
-		if key not in data:
-			raise ValueError(f"missing key: {key}")
-		if not isinstance(data[key], expected_version):
-			raise TypeError(f"Incorrect type for '{key}': Expected {expected_version.__name__}, but got {type(data[key]).__name__}")
-
-	configs = ["sequence_length", "sizes"]
-	if approach == "ExInSeqs" or approach == "SWExInSeqs":
-		configs.append("flanks")
-
-	for key in configs:
+	for key in sources:
 		if key not in data:
 			raise ValueError(f"missing key: {key}")
 
-	for item in data["sizes"]:
-		if not isinstance(item, dict):
-				raise TypeError(f"Each item in 'sizes' must be a dict, but got {type(item).__name__}")
-		if "name" not in item or "length" not in item:
-			raise ValueError("Each item in 'sizes' must contain 'name' and 'length' keys")
-		if not isinstance(item["name"], str):
-			raise TypeError(f"Incorrect type for 'name': Expected str, but got {type(item['name']).__name__}")
-		if not isinstance(item["length"], int):
-			raise TypeError(f"Incorrect type for 'len': Expected int, but got {type(item['length']).__name__}")
-
-	return data
+	for dataset in sources:
+		sizes = data[dataset]
+		
+		for item in sizes:
+			if not isinstance(item, dict):
+					raise TypeError(f"Each item in 'sizes' must be a dict, but got {type(item).__name__}")
+			if "name" not in item or "length" not in item:
+				raise ValueError("Each item in 'sizes' must contain 'name' and 'length' keys")
+			if not isinstance(item["name"], str):
+				raise TypeError(f"Incorrect type for 'name': Expected str, but got {type(item['name']).__name__}")
+			if not isinstance(item["length"], int):
+				raise TypeError(f"Incorrect type for 'len': Expected int, but got {type(item['length']).__name__}")
