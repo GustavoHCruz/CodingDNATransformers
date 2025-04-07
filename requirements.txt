@@ -1,5 +1,6 @@
 biopython==1.85
 ipython==8.32.0
+gradio==5.23.3
 numpy==2.2.2
 pandas==2.2.3
 plyer==2.1.0

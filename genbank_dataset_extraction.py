@@ -18,11 +18,41 @@ if in_notebook:
 else:
 	from tqdm import tqdm
 
-def splicing_sites_extraction(genbank_file, csv_output_file, seq_max_len=512):
-	datasets_configs = read_datasets_configs()
+def write_csv(csv_output_file, fieldnames, data):
+	unique_records = set()
+	with open(csv_output_file, mode="w", newline="", encoding="utf-8") as csvfile:
+		progress_bar = tqdm(total=len(data), desc="Writing CSV Progress", leave=True)
 
+		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+		writer.writeheader()
+
+		duplicated_counter = 0
+		counter = 0
+		for record in data:
+			record_tuple = tuple(record[field] for field in fieldnames)
+			record_hash = hash(record_tuple)
+			
+			if record_hash not in unique_records:
+				unique_records.add(record_hash)
+				writer.writerow(record)
+			else:
+				duplicated_counter += 1
+			counter += 1
+			
+			if counter % 1000 == 0:
+				progress_bar.update(1000)
+				progress_bar.set_postfix_str(f"{duplicated_counter} duplicated")
+
+		progress_bar.update(counter % 1000)
+	
+	progress_bar.close()
+
+def splicing_sites_extraction(genbank_file, csv_output_file):
+	datasets_configs = read_datasets_configs("ExInSeqs", "genbank")
+
+	seq_max_len = datasets_configs["version"]["default"]["sequence_length"]
 	flank_len = datasets_configs["version"]["small"]["flanks"]
-	flank_extended_len = datasets_configs["version"]["normal"]["flanks"]
+	flank_extended_len = datasets_configs["version"]["default"]["flanks"]
 	total_records = None
 
 	cache_file_path = "cache/genbank_files_len.csv"
@@ -122,33 +152,8 @@ def splicing_sites_extraction(genbank_file, csv_output_file, seq_max_len=512):
 			else:
 				progress_bar.update(1)
 
-	unique_records = set()
-	with open(csv_output_file, mode="w", newline="", encoding="utf-8") as csvfile:
-		fieldnames = ["sequence", "label", "organism", "gene", "flank_before", "flank_before_extended", "flank_after", "flank_after_extended"]
-
-		progress_bar = tqdm(total=len(data), desc="Writing CSV Progress", leave=True)
-
-		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-		writer.writeheader()
-
-		duplicated_counter = 0
-		counter = 0
-		for record in data:
-			record_tuple = tuple(record[field] for field in fieldnames)
-			record_hash = hash(record_tuple)
-			
-			if record_hash not in unique_records:
-				unique_records.add(record_hash)
-				writer.writerow(record)
-			else:
-				duplicated_counter += 1
-			counter += 1
-			
-			if counter % 1000 == 0:
-				progress_bar.update(1000)
-				progress_bar.set_postfix_str(f"{duplicated_counter} duplicated")
-
-		progress_bar.update(counter % 1000)
+	fieldnames = ["sequence", "label", "organism", "gene", "flank_before", "flank_before_extended", "flank_after", "flank_after_extended"]
+	write_csv(csv_output_file=csv_output_file, fieldnames=fieldnames, data=data)
 
 	if new_reading:
 		df.loc[len(df)] = [genbank_file, record_counter]
@@ -254,33 +259,8 @@ def sequence_rebuild_extraction(genbank_file, csv_output_file, seq_max_len=512):
 
 	print(f"Accepted Records: {accepted_records_counter}")
 
-	unique_records = set()
-	with open(csv_output_file, mode="w", newline="", encoding="utf-8") as csvfile:
-		fieldnames = ["sequence", "builded", "organism"]
-
-		progress_bar = tqdm(total=len(data), desc="Writing CSV Progress", leave=True)
-
-		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-		writer.writeheader()
-
-		duplicated_counter = 0
-		counter = 0
-		for record in data:
-			record_tuple = tuple(record[field] for field in fieldnames)
-			record_hash = hash(record_tuple)
-			
-			if record_hash not in unique_records:
-				unique_records.add(record_hash)
-				writer.writerow(record)
-			else:
-				duplicated_counter += 1
-			counter += 1
-			
-			if counter % 1000 == 0:
-				progress_bar.update(1000)
-				progress_bar.set_postfix_str(f"{duplicated_counter} duplicated")
-		
-		progress_bar.update(counter % 1000)
+	fieldnames = ["sequence", "builded", "organism"]
+	write_csv(csv_output_file=csv_output_file, fieldnames=fieldnames, data=data)
 
 	if new_reading:
 		df.loc[len(df)] = [genbank_file, record_counter]
