@@ -10,7 +10,6 @@ def read_config_file():
 		"genbank_file": str,
 		"gencode_file_annotations": str,
 		"gencode_file_genome": str,
-		"genbank_cache_file": str
 	}
 
 	with open("configs/config.json", "r") as file:
