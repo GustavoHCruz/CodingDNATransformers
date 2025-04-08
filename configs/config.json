@@ -2,9 +2,8 @@
   "datasets_raw_dir": "datasets_raw",
   "datasets_dir": "datasets",
   "cache_dir": "cache",
-  "cache_file": "genbank_files_len.csv",
+  "cache_file": "files_len.csv",
   "genbank_file": "SplicingSitesSeqs.gb",
-  "gencode_file_annotations": "gencode.v47.basic.annotation.gtf",
   "gencode_file_genome": "GRCh38.primary_assembly.genome.fa",
-  "genbank_cache_file": "genbank_files_len.csv"
+  "gencode_file_annotations": "gencode.v47.basic.annotation.gtf"
 }
