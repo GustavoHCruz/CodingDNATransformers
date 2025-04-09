@@ -1,9 +1,8 @@
 *.gb
+*.gtf
+*.fa
 *.csv
 /models
 __pycache__
 /cache
 /logs
-/.venv
-*.gtf
-*.fa
