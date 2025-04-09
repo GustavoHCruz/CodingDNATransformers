@@ -1,0 +1,32 @@
+[project]
+name = "src"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Gustavo Henrique",email = "ghfc2000@hotmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "dotenv (>=0.9.9,<0.10.0)",
+    "biopython (>=1.85,<2.0)",
+    "fastapi (>=0.115.12,<0.116.0)",
+    "uvicorn (>=0.34.0,<0.35.0)",
+    "gradio (>=5.24.0,<6.0.0)",
+    "numpy (>=2.2.4,<3.0.0)",
+    "pandas (>=2.2.3,<3.0.0)",
+    "plyer (>=2.1.0,<3.0.0)",
+    "transformers (>=4.51.1,<5.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "splicingsitestransformer"
+
+[tool.poetry.scripts]
+backend-dev = "src.app.backend.scripts:start_dev"
+backend-prod = "src.app.backend.scripts:start_prod"
