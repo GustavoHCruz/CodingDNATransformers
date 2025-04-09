@@ -1,6 +1,6 @@
 import json
-import os
-import sys
+
+from app.utils.paths import config_file
 
 
 def read_config_file():
@@ -14,7 +14,7 @@ def read_config_file():
 		"gencode_file_genome": str,
 	}
 
-	with open("configs/config.json", "r") as file:
+	with open(config_file("config.json"), "r") as file:
 		data = json.load(file)
 
 	for key, expected_type in expected_attr.items():
