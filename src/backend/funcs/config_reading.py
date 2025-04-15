@@ -1,7 +1,5 @@
 import json
 
-from app.utils.paths import read_config_file
-
 
 def read_config_file():
 	expected_attr = {

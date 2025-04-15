@@ -1,9 +1,9 @@
 from fastapi import APIRouter
 
-from app.backend.models.base import BaseResponse
-from app.backend.models.configuration_model import ConfigModel
-from app.backend.schemas.configuration_schema import ConfigPatch
-from app.backend.services.configuration_service import get_config, patch_config
+from backend.models.base import BaseResponse
+from backend.models.configuration_model import ConfigModel
+from backend.schemas.configuration_schema import ConfigPatch
+from backend.services.configuration_service import get_config, patch_config
 
 router = APIRouter(prefix="/configuration", tags=["Configuration"])
 

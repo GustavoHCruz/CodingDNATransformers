@@ -31,5 +31,7 @@ build-backend = "poetry.core.masonry.api"
 name = "splicingsitestransformer"
 
 [tool.poetry.scripts]
-backend-dev = "src.app.backend.scripts:start_dev"
-backend-prod = "src.app.backend.scripts:start_prod"
+backend-dev = "src.scripts:backend_dev"
+backend = "src.scripts:backend"
+frontend-dev = "src.scripts:frontend_dev"
+backend = "src.scripts:frontend"
