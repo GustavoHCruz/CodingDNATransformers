@@ -1,8 +1,7 @@
+from models.progress import Progress
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import Session
-
-from backend.models.progress import Progress
 
 DATABASE_URL = "sqlite:///./splicingsitestransformers.db"
 

@@ -10,6 +10,7 @@ class SourceEnum(str, Enum):
 
 class ExInTranslator(SQLModel, table=True):
   id: Optional[int] = Field(default=None, primary_key=True)
+  parent_id: int | None
   source: SourceEnum
   sequence: str
   organism: str | None

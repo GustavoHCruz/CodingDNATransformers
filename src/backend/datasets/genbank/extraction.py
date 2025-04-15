@@ -2,12 +2,13 @@ from Bio import SeqIO
 from Bio.Seq import _PartiallyDefinedSequenceData, _UndefinedSequenceData
 from tqdm import tqdm
 
-from funcs.config_reading import read_datasets_configs
-from funcs.dataset_utils import (cache_initial_config, cache_save_config,
-                                 initial_configuration, write_csv)
+from backend.funcs.config_reading import read_datasets_configs
+from backend.funcs.dataset_utils import (cache_initial_config,
+                                         cache_save_config,
+                                         initial_configuration, write_csv)
 
 
-def exin_classifier(seq_max_len=512, flank_max_len=25):
+def exin_classifier(seq_max_len=512, flank_max_len=25) -> None:
 	caller = "genbank"
 	config, genbank_file_path, cache_file_path = initial_configuration(caller)
 	approach = "ExInSeqs"
@@ -278,11 +279,11 @@ def sliding_window_extraction():
 	if new_reading:
 		cache_save_config(record_counter, genbank_file_path, cache_file_path)
 
-def protein_extraction():
+def protein_extraction() -> None:
 	caller = "genbank"
 	config, genbank_file_path, cache_file_path = initial_configuration(caller)
 	approach = "ProteinSeqs"
-	csv_output_file = f"{config["datasets_processed_dir"]}/{approach}_genbank.csv"
+	csv_output_file = f"{approach}_genbank.csv"
 	datasets_configs = read_datasets_configs(approach)
 
 	seq_max_len = datasets_configs["default"]["sequence_length"]
@@ -340,5 +341,3 @@ def protein_extraction():
 
 	if new_reading:
 		cache_save_config(record_counter, genbank_file_path, cache_file_path)
-
-splicing_sites_extraction()

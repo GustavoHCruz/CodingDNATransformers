@@ -1,13 +1,12 @@
-from app.backend.models.datasets_model import DatasetsRaw
-from app.backend.services.decorators import handle_exceptions
-from pipelines.datasets.genbank.extraction import \
+from backend.datasets.genbank.extraction import \
     splicing_sites_extraction as ss_genbank
-from pipelines.datasets.gencode.extraction import \
+from backend.datasets.gencode.extraction import \
     splicing_sites_extraction as ss_gencode
+from backend.services.decorators import handle_exceptions
 
 
 @handle_exceptions
-def process_raw(settings: DatasetsRaw):
+def process_raw(settings: any) -> any:
 	if settings["gencode"]:
 		ss_genbank()
 	return
