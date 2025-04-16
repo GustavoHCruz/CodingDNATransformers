@@ -1,15 +1,14 @@
 from enum import Enum
-from typing import Optional
 
-from sqlmodel import Field, SQLModel
+from models.base_model import BaseModel
+from sqlmodel import Field
 
 
 class SourceEnum(str, Enum):
   genbank = "genbank"
   gencode = "gencode"
 
-class ExInClassifier(SQLModel, table=True):
-  id: Optional[int] = Field(default=None, primary_key=True)
+class ExInClassifier(BaseModel, table=True):
   parent_id: int | None
   source: SourceEnum
   sequence: str

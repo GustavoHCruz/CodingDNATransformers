@@ -3,31 +3,17 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from contextlib import asynccontextmanager
-from typing import Literal
-
-#from backend.api import configuration
-from db import init_db
-from fastapi import APIRouter, FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException
 from handlers.exception_handlers import (generic_exception_handler,
                                          http_exception_handler)
+from lifespan import lifespan
+from routes import ping_route
 
-app = FastAPI()
-
-#@asynccontextmanager
-#async def lifespan(app: FastAPI) -> None:
-#  init_db()
-
-#router = APIRouter(prefix="/ping")
-
-#@router.get("/")
-#def get() -> Literal['Pong']:
-#  return "Pong"
+app = FastAPI(lifespan=lifespan)
 
 # Global Handlers
-#app.add_exception_handler(HTTPException, http_exception_handler)
-#app.add_exception_handler(Exception, generic_exception_handler)
+app.add_exception_handler(HTTPException, http_exception_handler)
+app.add_exception_handler(Exception, generic_exception_handler)
 
 # Routes
-#app.include_router(router)
-#app.include_router(configuration.router)
+app.include_router(ping_route.router)

@@ -1,9 +1,0 @@
-{
-  "datasets_raw_dir": "data/datasets_raw",
-  "datasets_processed_dir": "data/datasets_processed",
-  "datasets_dir": "data/datasets",
-  "cache_dir": "data/cache",
-  "genbank_file": "SplicingSitesSeqs.gb",
-  "gencode_file_genome": "GRCh38.primary_assembly.genome.fa",
-  "gencode_file_annotations": "gencode.v47.basic.annotation.gtf"
-}

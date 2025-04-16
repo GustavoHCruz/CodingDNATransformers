@@ -1,7 +1,6 @@
 from enum import Enum
-from typing import Optional
 
-from sqlmodel import Field, SQLModel
+from models.base_model import BaseModel
 
 
 class ApproachEnum(str, Enum):
@@ -10,11 +9,7 @@ class ApproachEnum(str, Enum):
   protein_translator = "protein_translator"
   sliding_window_extraction = "sliding_window_extraction"
 
-class Datasets(SQLModel, table=True):
-  id: Optional[int] = Field(default=None, primary_key=True)
+class Datasets(BaseModel, table=True):
   approach: ApproachEnum
   name: str
-  sequence: str
-  organism: str
-  target_sequence: str
-  hash_id: str = Field(unique=True, index=True)
+  target_id: int
