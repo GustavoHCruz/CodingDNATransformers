@@ -1,6 +1,6 @@
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
-from interfaces.response import BaseResponse
+from schemas.base_response import BaseResponse
 
 
 def http_exception_handler(_: Request, exc: HTTPException) -> JSONResponse:
