@@ -1,30 +1,30 @@
+from typing import List
+
 from Bio import SeqIO
 from Bio.Seq import _PartiallyDefinedSequenceData, _UndefinedSequenceData
-from tqdm import tqdm
+from models.exin_classifier_model import ExInClassifier
+from services.progress_tracker_service import create_progress
+from services.raw_file_info_service import get_by_file_name
 
-from backend.funcs.config_reading import read_datasets_configs
-from backend.funcs.dataset_utils import (cache_initial_config,
-                                         cache_save_config,
-                                         initial_configuration, write_csv)
+from src.backend.models.progress_model import ProgressTypeEnum
 
 
-def exin_classifier(seq_max_len=512, flank_max_len=25) -> None:
-	caller = "genbank"
-	config, genbank_file_path, cache_file_path = initial_configuration(caller)
-	approach = "ExInSeqs"
-	csv_output_file = f"{config["datasets_processed_dir"]}/{approach}_{caller}.csv"
-
-	total_records, new_reading = cache_initial_config(genbank_file_path, cache_file_path)
+def exin_classifier(seq_max_len=512, flank_max_len=25) -> List[ExInClassifier]:
+	raw_file_info = get_by_file_name(genbank_file_path)
+	
+	new_reading = True
+	if raw_file_info:
+		total_records = raw_file_info.total_records
+		new_reading = False
 
 	data = []
 	record_counter = 0
-	if new_reading:
-		progress_bar = tqdm(bar_format="{desc}")
-	else:
-		progress_bar = tqdm(total=total_records, desc="File Scan Progress", leave=True)
+
+	progress_type = ProgressTypeEnum.counter if new_reading else ProgressTypeEnum.percentage
+	create_progress(progress_type)
 
 	with open(genbank_file_path, "r") as gb_file:
-		for record in SeqIO.parse(gb_file, caller):
+		for record in SeqIO.parse(gb_file, "genbank"):
 			sequence = record.seq
 
 			if (isinstance(record.seq._data, (_UndefinedSequenceData, _PartiallyDefinedSequenceData))):

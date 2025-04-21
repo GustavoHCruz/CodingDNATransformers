@@ -2,33 +2,9 @@ import csv
 import os
 
 import pandas as pd
+from funcs.config_reading import read_config_file
 from tqdm import tqdm
 
-from funcs.config_reading import read_config_file
-
-
-def initial_configuration(caller):
-	config = read_config_file()
-	dirs = ["datasets_raw_dir", "datasets_processed_dir",  "datasets_dir", "cache_dir"]
-
-	for directory in dirs:
-		if not os.path.isdir(config[directory]):
-			os.makedirs(config[directory])
-
-	cache_file_path = f"{config["cache_dir"]}/{config["cache_file"]}"
-	
-	if caller == "genbank":
-		genbank_file_path = f"{config["datasets_raw_dir"]}/{config["genbank_file"]}"
-
-		return config, genbank_file_path, cache_file_path
-
-	elif caller == "gencode":
-		gencode_genome_file_path = f"{config["datasets_raw_dir"]}/{config["gencode_file_genome"]}"
-		gencode_annotations_file_path = f"{config["datasets_raw_dir"]}/{config["gencode_file_annotations"]}"
-
-		return config, gencode_genome_file_path, gencode_annotations_file_path, cache_file_path
-	
-	raise ValueError("Unable to determine caller")
 
 def cache_initial_config(file_path, cache_file_path):
 	total_records = None
