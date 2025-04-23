@@ -4,6 +4,7 @@ from Bio import SeqIO
 from Bio.Seq import _PartiallyDefinedSequenceData, _UndefinedSequenceData
 from etl.utils import generate_hash, post_progress
 from models.exin_classifier_model import ExInClassifier, SourceEnum
+from services.progress_tracker_service import finish_progress
 from services.raw_file_info_service import save_file
 
 
@@ -81,6 +82,8 @@ def exin_classifier(genbank_file_path: str, total_records: int | None, new_readi
 
 	if new_reading:
 		save_file(genbank_file_path, total_records)
+	
+	finish_progress(task_id)
 
 	return data
 
