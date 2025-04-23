@@ -9,9 +9,9 @@ class SourceEnum(str, Enum):
   gencode = "gencode"
 
 class ProteinTranslator(BaseModel, table=True):
-  parent_id: int | None
+  hash_id: str = Field(unique=True, index=True)
+  dataset_id: int | None
   source: SourceEnum
   sequence: str
   organism: str | None
   target_protein: str
-  hash_id: str = Field(unique=True, index=True)

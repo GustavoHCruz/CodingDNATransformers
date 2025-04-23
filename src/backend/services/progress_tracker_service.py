@@ -1,5 +1,5 @@
 from database.db import get_session
-from models.progress_model import ProgressTracker
+from models.progress_tracker_model import ProgressTracker
 from sqlmodel import select
 
 

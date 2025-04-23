@@ -5,8 +5,8 @@ from models.base_model import BaseModel
 
 
 class ProgressTypeEnum(str, Enum):
-  percentage = "percentage"
   counter = "counter"
+  percentage = "percentage"
 
 class StatusEnum(str, Enum):
   in_progress = "in_progress"
@@ -16,6 +16,6 @@ class StatusEnum(str, Enum):
 class ProgressTracker(BaseModel, table=True):
   task_name: Optional[str] = None
   progress: float = 0.0
-  progress_type: ProgressTypeEnum
+  progress_type: ProgressTypeEnum = ProgressTypeEnum.counter
   status: StatusEnum = StatusEnum.in_progress
   info: Optional[str] = None

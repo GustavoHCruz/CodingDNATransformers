@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import Optional
 
 from models.base_model import BaseModel
 
@@ -9,7 +10,17 @@ class ApproachEnum(str, Enum):
   protein_translator = "protein_translator"
   sliding_window_extraction = "sliding_window_extraction"
 
+class DatasetTypeEnum(str, Enum):
+  base = "base"
+  child = "child"
+
+class OriginEnum(str, Enum):
+  genbank = "genbank"
+  gencode = "gencode"
+
 class Datasets(BaseModel, table=True):
   approach: ApproachEnum
+  origin: OriginEnum
   name: str
-  target_id: int
+  dataset_type: DatasetTypeEnum = DatasetTypeEnum.base
+  parent_id: Optional[int] = None
