@@ -9,9 +9,10 @@ class SourceEnum(str, Enum):
   gencode = "gencode"
 
 class ExInTranslator(BaseModel, table=True):
-  parent_id: int | None
+  hash_id: str = Field(unique=True, index=True)
   source: SourceEnum
+  dataset_id: int
+  parent_id: int | None
   sequence: str
   organism: str | None
   target_sequence: str
-  hash_id: str = Field(unique=True, index=True)

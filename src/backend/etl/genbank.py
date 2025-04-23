@@ -2,35 +2,22 @@ from typing import List
 
 from Bio import SeqIO
 from Bio.Seq import _PartiallyDefinedSequenceData, _UndefinedSequenceData
-from models.exin_classifier_model import ExInClassifier
-from services.progress_tracker_service import create_progress
-from services.raw_file_info_service import get_by_file_name
-
-from src.backend.models.progress_model import ProgressTypeEnum
+from etl.utils import generate_hash, post_progress
+from models.exin_classifier_model import ExInClassifier, SourceEnum
+from services.raw_file_info_service import save_file
 
 
-def exin_classifier(seq_max_len=512, flank_max_len=25) -> List[ExInClassifier]:
-	raw_file_info = get_by_file_name(genbank_file_path)
-	
-	new_reading = True
-	if raw_file_info:
-		total_records = raw_file_info.total_records
-		new_reading = False
-
+def exin_classifier(genbank_file_path: str, total_records: int | None, new_reading, task_id: int, dataset_id: int, seq_max_len=512, flank_max_len=25) -> List[ExInClassifier]:
 	data = []
 	record_counter = 0
 
-	progress_type = ProgressTypeEnum.counter if new_reading else ProgressTypeEnum.percentage
-	create_progress(progress_type)
-
 	with open(genbank_file_path, "r") as gb_file:
 		for record in SeqIO.parse(gb_file, "genbank"):
+			post_progress(task_id, new_reading, total_records, record_counter)
 			sequence = record.seq
 
 			if (isinstance(record.seq._data, (_UndefinedSequenceData, _PartiallyDefinedSequenceData))):
 				record_counter += 1
-				if not new_reading:
-					progress_bar.update(1)
 				continue
 
 			organism = record.annotations.get("organism", "")
@@ -47,6 +34,7 @@ def exin_classifier(seq_max_len=512, flank_max_len=25) -> List[ExInClassifier]:
 						continue
 
 					feature_sequence = sequence[location.start:location.end]
+					feature_sequence = str(feature_sequence) if strand == 1 else str(feature_sequence.reverse_complement())
 
 					if len(feature_sequence) > seq_max_len:
 						continue
@@ -57,6 +45,7 @@ def exin_classifier(seq_max_len=512, flank_max_len=25) -> List[ExInClassifier]:
 						start = 0
 					if location.start > 0:
 						before = sequence[start:location.start]
+						before = str(before) if strand == 1 else str(before.reverse_complement())
 
 					after = ""
 					end = location.end + flank_max_len
@@ -64,33 +53,38 @@ def exin_classifier(seq_max_len=512, flank_max_len=25) -> List[ExInClassifier]:
 						end = len(sequence)
 					if location.end < len(sequence):
 						after = sequence[location.end:end]
+						after = str(after) if strand == 1 else str(after.reverse_complement())
 
 					label = feature.type
 
-					data.append({
-						"sequence": str(feature_sequence) if strand == 1 else str(feature_sequence.reverse_complement()),
-						"label": str(label),
-						"organism": str(organism),
-						"gene": str(gene[0] if type(gene) == list else gene),
-						"flank_before": str(before) if strand == 1 else str(before.reverse_complement()),
-						"flank_after": str(after) if strand == 1 else str(after.reverse_complement()),
-					})
+					source = SourceEnum.genbank
+					label = str(label)
+					organism = str(organism)
+					gene = str(gene[0] if type(gene) == list else gene)
+					hash_id = generate_hash(str(source), str(dataset_id), feature_sequence, label, organism, gene, before, after)
+
+					new = ExInClassifier(
+						hash_id=hash_id,
+						source=source,
+						dataset_id=dataset_id,
+						sequence=feature_sequence,
+						flank_left=before,
+						flank_right=after,
+						organism=organism,
+						gene=gene,
+						label=label
+					)
+
+					data.append(new)
 
 			record_counter += 1
 
-			if new_reading:
-				progress_bar.set_description_str(f"Records Scanned: {record_counter}")
-			else:
-				progress_bar.update(1)
-		
-	progress_bar.close()
-
-	fieldnames = ["sequence", "label", "organism", "gene", "flank_before", "flank_after"]
-	write_csv(csv_output_file=csv_output_file, fieldnames=fieldnames, data=data)
-
 	if new_reading:
-		cache_save_config(record_counter, genbank_file_path, cache_file_path)
+		save_file(genbank_file_path, total_records)
 
+	return data
+
+'''
 def sequence_rebuild_extraction():
 	caller = "genbank"
 	config, genbank_file_path, cache_file_path = initial_configuration(caller)
@@ -341,3 +335,4 @@ def protein_extraction() -> None:
 
 	if new_reading:
 		cache_save_config(record_counter, genbank_file_path, cache_file_path)
+'''

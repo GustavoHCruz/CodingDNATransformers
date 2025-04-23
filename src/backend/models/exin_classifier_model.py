@@ -9,12 +9,12 @@ class SourceEnum(str, Enum):
   gencode = "gencode"
 
 class ExInClassifier(BaseModel, table=True):
-  parent_id: int | None
+  hash_id: str = Field(unique=True, index=True)
   source: SourceEnum
+  dataset_id: int | None
   sequence: str
   flank_left: str | None
   flank_right: str | None
   organism: str | None
   gene: str | None
   label: str
-  hash_id: str = Field(unique=True, index=True)

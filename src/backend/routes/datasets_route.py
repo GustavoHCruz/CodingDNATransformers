@@ -5,7 +5,7 @@ from services.datasets_service import process_raw
 
 router = APIRouter(prefix="/datasets", tags=["Datasets"])
 
-@router.create("/")
-def create(data: CreationSettings) -> BaseResponse:
+@router.post("/")
+def post(data: CreationSettings) -> BaseResponse:
   response = process_raw(data)
-  return BaseResponse(status="success", message="Configuration File Updated", data=response)
+  return BaseResponse(status="success", message="Created", data=response)
