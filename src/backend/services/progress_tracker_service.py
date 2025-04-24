@@ -1,11 +1,11 @@
 from database.db import get_session
-from models.progress_tracker_model import ProgressTracker
+from models.progress_tracker_model import ProgressTracker, StatusEnum
 from sqlmodel import select
 
 
-def create_progress(type: str) -> ProgressTracker:
+def create_progress(progress_type: str) -> ProgressTracker:
   with get_session() as session:
-    new_instance = ProgressTracker(type=type)
+    new_instance = ProgressTracker(progress_type=progress_type)
     session.add(new_instance)
     session.commit()
     session.refresh(new_instance)
@@ -36,7 +36,9 @@ def finish_progress(task_id: str) -> ProgressTracker:
     statement = select(ProgressTracker).where(ProgressTracker.id == task_id)
     record = session.exec(statement).first()
     
-    session.delete(record)
+    record.status = StatusEnum.complete
+    session.add(record)
     session.commit()
+    session.refresh(record)
 
     return record 
