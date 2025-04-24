@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from schemas.base_response import BaseResponse
 from schemas.datasets_schema import CreationSettings
-from services.datasets_service import process_raw
+from services.dataset_service import process_raw
 
 router = APIRouter(prefix="/datasets", tags=["Datasets"])
 

@@ -1,20 +1,18 @@
-from typing import List
-
 from Bio import SeqIO
 from Bio.Seq import _PartiallyDefinedSequenceData, _UndefinedSequenceData
-from etl.utils import generate_hash, post_progress
-from models.exin_classifier_model import ExInClassifier, SourceEnum
+from etl.utils import post_progress
 from services.progress_tracker_service import finish_progress
 from services.raw_file_info_service import save_file
 
 
-def exin_classifier(genbank_file_path: str, total_records: int | None, new_reading, task_id: int, dataset_id: int, seq_max_len=512, flank_max_len=25) -> List[ExInClassifier]:
-	data = []
+def exin_classifier_gb(genbank_file_path: str, total_records: int | None, new_reading, task_id: int, parent_id: int, seq_max_len=512, flank_max_len=25):
 	record_counter = 0
+	threshold = 5000
 
 	with open(genbank_file_path, "r") as gb_file:
 		for record in SeqIO.parse(gb_file, "genbank"):
-			post_progress(task_id, new_reading, total_records, record_counter)
+			if record_counter % threshold == 0:
+				post_progress(task_id, new_reading, total_records, record_counter)
 			sequence = record.seq
 
 			if (isinstance(record.seq._data, (_UndefinedSequenceData, _PartiallyDefinedSequenceData))):
@@ -56,66 +54,41 @@ def exin_classifier(genbank_file_path: str, total_records: int | None, new_readi
 						after = sequence[location.end:end]
 						after = str(after) if strand == 1 else str(after.reverse_complement())
 
-					label = feature.type
+					label = str(feature.type)
 
-					source = SourceEnum.genbank
-					label = str(label)
 					organism = str(organism)
 					gene = str(gene[0] if type(gene) == list else gene)
-					hash_id = generate_hash(str(source), str(dataset_id), feature_sequence, label, organism, gene, before, after)
 
-					new = ExInClassifier(
-						hash_id=hash_id,
-						source=source,
-						dataset_id=dataset_id,
+					yield dict(
+						parent_id=parent_id,
 						sequence=feature_sequence,
-						flank_left=before,
-						flank_right=after,
+						target=label,
+						flank_before=before,
+						flank_after=after,
 						organism=organism,
-						gene=gene,
-						label=label
+						gene=gene
 					)
-
-					data.append(new)
 
 			record_counter += 1
 
 	if new_reading:
-		save_file(genbank_file_path, total_records)
+		save_file(genbank_file_path, record_counter)
 	
+	post_progress(task_id, new_reading, total_records, record_counter)
 	finish_progress(task_id)
 
-	return data
-
-'''
-def sequence_rebuild_extraction():
-	caller = "genbank"
-	config, genbank_file_path, cache_file_path = initial_configuration(caller)
-	approach = "RebuilSeqs"
-	csv_output_file = f"{config["datasets_processed_dir"]}/{approach}_genbank.csv"
-	datasets_configs = read_datasets_configs(approach)
-
-	seq_max_len = datasets_configs["default"]["sequence_length"]
-
-	total_records, new_reading = cache_initial_config(genbank_file_path, cache_file_path)
-
-	data = []
+def exin_translator_gb(genbank_file_path: str, total_records: int | None, new_reading, task_id: int, parent_id: int, seq_max_len=512):
 	record_counter = 0
-	accepted_records_counter = 0
-
-	if new_reading:
-		progress_bar = tqdm(bar_format="{desc}")
-	else:
-		progress_bar = tqdm(total=total_records, desc="File Scan Progress", leave=True)
+	threshold = 5000
 
 	with open(genbank_file_path, "r") as gb_file:
-		for record in SeqIO.parse(gb_file, caller):
+		for record in SeqIO.parse(gb_file, "genbank"):
+			if record_counter % threshold == 0:
+				post_progress(task_id, new_reading, total_records, record_counter)
 			sequence = record.seq
 
 			if len(sequence) > seq_max_len or isinstance(record.seq._data, (_UndefinedSequenceData, _PartiallyDefinedSequenceData)):
 				record_counter += 1
-				if not new_reading:
-					progress_bar.update(1)
 				continue
 
 			organism = record.annotations.get("organism", "")
@@ -146,8 +119,6 @@ def sequence_rebuild_extraction():
 			
 			if strand_invalid:
 				record_counter += 1
-				if not new_reading:
-					progress_bar.update(1)
 				continue
 
 			final_sequence = []
@@ -162,58 +133,33 @@ def sequence_rebuild_extraction():
 			final_sequence.append(str(sequence[last_index:]))
 			final_sequence = "".join(final_sequence)
 
-			data.append({
-				"sequence": sequence,
-				"builded": final_sequence,
-				"organism": organism
-			})
+			yield dict(
+				parent_id=parent_id,
+				sequence=sequence,
+				target=final_sequence,
+				organism=organism
+			)
 
-			accepted_records_counter += 1
 			record_counter += 1
 
-			if new_reading:
-				progress_bar.set_description_str(f"Records Scanned: {record_counter}")
-			else:
-				progress_bar.update(1)
-
-	print(f"Accepted Records: {accepted_records_counter}")
-
-	progress_bar.close()
-
-	fieldnames = ["sequence", "builded", "organism"]
-	write_csv(csv_output_file=csv_output_file, fieldnames=fieldnames, data=data)
-
 	if new_reading:
-		cache_save_config(record_counter, genbank_file_path, cache_file_path)
+		save_file(genbank_file_path, record_counter)
+	
+	post_progress(task_id, new_reading, total_records, record_counter)
+	finish_progress(task_id)
 
-def sliding_window_extraction():
-	caller = "genbank"
-	config, genbank_file_path, cache_file_path = initial_configuration(caller)
-	approach = "SWExInSeqs"
-	csv_output_file = f"{config["datasets_processed_dir"]}/{approach}_genbank.csv"
-	datasets_configs = read_datasets_configs(approach)
-
-	seq_max_len = datasets_configs["default"]["sequence_length"]
-
-	total_records, new_reading = cache_initial_config(genbank_file_path, cache_file_path)
-
-	data = []
+def sliding_window_tagger_gb(genbank_file_path: str, total_records: int | None, new_reading, task_id: int, parent_id: int, seq_max_len=512):
 	record_counter = 0
-	accepted_records_counter = 0
-
-	if new_reading:
-		progress_bar = tqdm(bar_format="{desc}")
-	else:
-		progress_bar = tqdm(total=total_records, desc="File Scan Progress", leave=True)
+	threshold = 5000
 
 	with open(genbank_file_path, "r") as gb_file:
-		for record in SeqIO.parse(gb_file, caller):
+		for record in SeqIO.parse(gb_file, "genbank"):
+			if record_counter % threshold == 0:
+				post_progress(task_id, new_reading, total_records, record_counter)
 			sequence = record.seq
 
 			if isinstance(record.seq._data, (_UndefinedSequenceData, _PartiallyDefinedSequenceData)) or len(sequence) > seq_max_len or len(sequence) < 3:
 				record_counter += 1
-				if not new_reading:
-					progress_bar.update(1)
 				continue
 
 			organism = record.annotations.get("organism", "")
@@ -242,8 +188,6 @@ def sliding_window_extraction():
 
 			if strand_invalid:
 				record_counter += 1
-				if not new_reading:
-					progress_bar.update(1)
 				continue
 
 			rest = len(sequence) - len(splicing_seq)
@@ -252,57 +196,33 @@ def sliding_window_extraction():
 
 			sequence = str(sequence) if strand == 1 else str(sequence.reverse_complement())
 
-			data.append({
-				"sequence": sequence,
-				"organism": organism,
-				"labeled_sequence": "".join(splicing_seq)
-			})
+			yield dict(
+				parent_id=parent_id,
+				sequence=sequence,
+				target="".join(splicing_seq),
+				organism=organism
+			)
 
-			accepted_records_counter += 1
 			record_counter += 1
 
-			if new_reading:
-				progress_bar.set_description_str(f"Records Scanned: {record_counter}")
-			else:
-				progress_bar.update(1)
-
-	print(f"Accepted Records: {accepted_records_counter}")
-
-	progress_bar.close()
-
-	fieldnames = ["sequence", "organism", "labeled_sequence"]
-	write_csv(csv_output_file=csv_output_file, fieldnames=fieldnames, data=data)
-
 	if new_reading:
-		cache_save_config(record_counter, genbank_file_path, cache_file_path)
+		save_file(genbank_file_path, record_counter)
+	
+	post_progress(task_id, new_reading, total_records, record_counter)
+	finish_progress(task_id)
 
-def protein_extraction() -> None:
-	caller = "genbank"
-	config, genbank_file_path, cache_file_path = initial_configuration(caller)
-	approach = "ProteinSeqs"
-	csv_output_file = f"{approach}_genbank.csv"
-	datasets_configs = read_datasets_configs(approach)
-
-	seq_max_len = datasets_configs["default"]["sequence_length"]
-
-	total_records, new_reading = cache_initial_config(genbank_file_path, cache_file_path)
-
-	data = []
+def protein_translator_gb(genbank_file_path: str, total_records: int | None, new_reading, task_id: int, parent_id: int, seq_max_len=512):
 	record_counter = 0
-
-	if new_reading:
-		progress_bar = tqdm(bar_format="{desc}")
-	else:
-		progress_bar = tqdm(total=total_records, desc="File Scan Progress", leave=True)
+	threshold = 5000
 
 	with open(genbank_file_path, "r") as gb_file:
-		for record in SeqIO.parse(gb_file, caller):
+		for record in SeqIO.parse(gb_file, "genbank"):
+			if record_counter % threshold == 0:
+				post_progress(task_id, new_reading, total_records, record_counter)
 			sequence = record.seq
 
 			if isinstance(record.seq._data, (_UndefinedSequenceData, _PartiallyDefinedSequenceData)) or len(sequence) > seq_max_len or len(sequence) < 3:
 				record_counter += 1
-				if not new_reading:
-					progress_bar.update(1)
 				continue
 
 			organism = record.annotations.get("organism", "")
@@ -318,24 +238,17 @@ def protein_extraction() -> None:
 				record_counter += 1
 				continue
 
-			data.append({
-				"sequence": str(sequence),
-				"organism": str(organism),
-				"translation": str(translation[0])
-			})
+			yield dict(
+				parent_id=parent_id,
+				sequence=str(sequence),
+				target=str(translation[0]),
+				organism=str(organism)
+			)
 
 			record_counter += 1
 
-			if new_reading:
-				progress_bar.set_description_str(f"Records Scanned: {record_counter}")
-			else:
-				progress_bar.update(1)
-
-	progress_bar.close()
-
-	fieldnames = ["sequence", "organism", "translation"]
-	write_csv(csv_output_file=csv_output_file, fieldnames=fieldnames, data=data)
-
 	if new_reading:
-		cache_save_config(record_counter, genbank_file_path, cache_file_path)
-'''
+		save_file(genbank_file_path, record_counter)
+	
+	post_progress(task_id, new_reading, total_records, record_counter)
+	finish_progress(task_id)
