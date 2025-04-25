@@ -1,9 +1,6 @@
 from Bio import SeqIO
-from tqdm import tqdm
-
-from funcs.config_reading import read_datasets_configs
-from funcs.dataset_utils import (cache_initial_config, cache_save_config,
-                                 initial_configuration, write_csv)
+from services.progress_tracker_service import finish_progress
+from services.raw_file_info_service import save_file
 
 
 def load_fasta(genome_file_path):
@@ -51,34 +48,14 @@ def reverse_complement(sequence, strand):
 	
 	return sequence
 
-def exin_classifier(seq_max_len=512, flank_max_len=25):
-	caller = "gencode"
-	config, gencode_genome_file_path, gencode_annotations_file_path, cache_file_path = initial_configuration(caller)
-	approach = "ExInSeqs"
-	csv_output_file = f"{config["datasets_processed_dir"]}/{approach}_{caller}.csv"
-
-	total_records, new_reading = cache_initial_config(gencode_genome_file_path, cache_file_path)
-
-	data = []
-	transcripts = {}
+def exin_classifier_gc(gencode_fasta_file_path: str, gencode_annotations_file_path: str, parent_id: int, seq_max_len=512, flank_max_len=25):
 	record_counter = 0
-	transcripts_counter = 0
-	ignored_ones = 0
+	transcripts = {}
 
-	if new_reading:
-		progress_bar = tqdm(bar_format="{desc}")
-	else:
-		progress_bar = tqdm(total=total_records, desc="File Scan progress", leave=True)
-
-	fasta_sequences = load_fasta(gencode_genome_file_path)
+	fasta_sequences = load_fasta(gencode_fasta_file_path)
 
 	for annotation in parse_gtf(gencode_annotations_file_path):
 		record_counter += 1
-
-		if not new_reading:
-			progress_bar.update(1)
-		else:
-			progress_bar.set_description_str(f"Records Scanned: {record_counter}")
 
 		feature = annotation.get("feature", None)
 		attributes = annotation.get("attributes", None)
@@ -109,34 +86,25 @@ def exin_classifier(seq_max_len=512, flank_max_len=25):
 			transcripts[transcript_id] = []
 			transcripts_counter += 1
 		transcripts[transcript_id].append((chrom, start, end, strand, gene))
-	
-	progress_bar.close()
-
-	progress_bar = tqdm(total=transcripts_counter, desc="Processing Data", leave=True)
 
 	for transcript_id, exons in transcripts.items():
 		exons.sort(key=lambda x: x[1])
 
-		progress_bar.update(1)
-
 		for i, (chrom, start, end, strand, gene) in enumerate(exons):
 			seq = fasta_sequences.get(chrom, "")[start:end]
 
-			flank_before = fasta_sequences.get(chrom, "")[max(0, start-flank_size):start]
-			flank_before_extended = fasta_sequences.get(chrom, "")[max(0, start-flank_extended_size):start]
-			flank_after = fasta_sequences.get(chrom, "")[end:end+flank_size]
-			flank_after_extended = fasta_sequences.get(chrom, "")[end:end+flank_extended_size]
+			flank_before = fasta_sequences.get(chrom, "")[max(0, start-flank_max_len):start]
+			flank_after = fasta_sequences.get(chrom, "")[end:end+flank_max_len]
 
-			data.append({
-				"sequence": str(reverse_complement(seq, strand)),
-				"label": "exon",
-				"organism": str("Homo sapiens"),
-				"gene": str(gene),
-				"flank_before": str(reverse_complement(flank_before, strand)),
-				"flank_before_extended": str(reverse_complement(flank_before_extended, strand)),
-				"flank_after": str(reverse_complement(flank_after, strand)),
-				"flank_after_extended": str(reverse_complement(flank_after_extended, strand))
-			})
+			yield dict(
+				parent_id=parent_id,
+				sequence=str(reverse_complement(seq, strand)),
+				target="exon",
+				flank_before=str(reverse_complement(flank_before, strand)),
+				flank_after=str(reverse_complement(flank_after, strand)),
+				organism=str("Homo sapiens"),
+				gene=str(gene),
+			)
 
 			if i < len(exons) - 1:
 				next_start = exons[i + 1][1]
@@ -146,28 +114,15 @@ def exin_classifier(seq_max_len=512, flank_max_len=25):
 				intron_seq = fasta_sequences.get(chrom, "")[end:next_start]
 
 				if intron_seq:
-					flank_before = fasta_sequences.get(chrom, "")[max(0, end - flank_size):end]
-					flank_before_extended = fasta_sequences.get(chrom, "")[max(0, end - flank_extended_size):end]
-					flank_after = fasta_sequences.get(chrom, "")[next_start:next_start+flank_size]
-					flank_after_extended = fasta_sequences.get(chrom, "")[next_start:next_start+flank_extended_size]
+					flank_before = fasta_sequences.get(chrom, "")[max(0, end - flank_max_len):end]
+					flank_after = fasta_sequences.get(chrom, "")[next_start:next_start+flank_max_len]
 
-					data.append({
-						"sequence": str(reverse_complement(intron_seq, strand)),
-						"label": "intron",
-						"organism": str("Homo sapiens"),
-						"gene": str(gene),
-						"flank_before": str(reverse_complement(flank_before, strand)),
-						"flank_before_extended": str(reverse_complement(flank_before_extended, strand)),
-						"flank_after": str(reverse_complement(flank_after, strand)),
-						"flank_after_extended": str(reverse_complement(flank_after_extended, strand))
-					})
-
-	progress_bar.close()
-
-	print(f"A total of {ignored_ones} sequences has been ignored due to the sequence length limit")
-
-	fieldnames = ["sequence", "label", "organism", "gene", "flank_before", "flank_before_extended", "flank_after", "flank_after_extended"]
-	write_csv(csv_output_file=csv_output_file, fieldnames=fieldnames, data=data)
-
-	if new_reading:
-		cache_save_config(record_counter, gencode_genome_file_path, cache_file_path)
+					yield dict(
+						parent_id=parent_id,
+						sequence=str(reverse_complement(intron_seq, strand)),
+						target="intron",
+						flank_before=str(reverse_complement(flank_before, strand)),
+						flank_after=str(reverse_complement(flank_after, strand)),
+						organism=str("Homo sapiens"),
+						gene=str(gene),
+					)

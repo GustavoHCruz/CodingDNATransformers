@@ -1,18 +1,12 @@
 from Bio import SeqIO
 from Bio.Seq import _PartiallyDefinedSequenceData, _UndefinedSequenceData
-from etl.utils import post_progress
-from services.progress_tracker_service import finish_progress
-from services.raw_file_info_service import save_file
 
 
-def exin_classifier_gb(genbank_file_path: str, total_records: int | None, new_reading, task_id: int, parent_id: int, seq_max_len=512, flank_max_len=25):
+def exin_classifier_gb(genbank_file_path: str, parent_id: int, seq_max_len=512, flank_max_len=25):
 	record_counter = 0
-	threshold = 5000
 
 	with open(genbank_file_path, "r") as gb_file:
 		for record in SeqIO.parse(gb_file, "genbank"):
-			if record_counter % threshold == 0:
-				post_progress(task_id, new_reading, total_records, record_counter)
 			sequence = record.seq
 
 			if (isinstance(record.seq._data, (_UndefinedSequenceData, _PartiallyDefinedSequenceData))):
@@ -71,20 +65,11 @@ def exin_classifier_gb(genbank_file_path: str, total_records: int | None, new_re
 
 			record_counter += 1
 
-	if new_reading:
-		save_file(genbank_file_path, record_counter)
-	
-	post_progress(task_id, new_reading, total_records, record_counter)
-	finish_progress(task_id)
-
-def exin_translator_gb(genbank_file_path: str, total_records: int | None, new_reading, task_id: int, parent_id: int, seq_max_len=512):
+def exin_translator_gb(genbank_file_path: str, parent_id: int, seq_max_len=512):
 	record_counter = 0
-	threshold = 5000
 
 	with open(genbank_file_path, "r") as gb_file:
 		for record in SeqIO.parse(gb_file, "genbank"):
-			if record_counter % threshold == 0:
-				post_progress(task_id, new_reading, total_records, record_counter)
 			sequence = record.seq
 
 			if len(sequence) > seq_max_len or isinstance(record.seq._data, (_UndefinedSequenceData, _PartiallyDefinedSequenceData)):
@@ -135,27 +120,18 @@ def exin_translator_gb(genbank_file_path: str, total_records: int | None, new_re
 
 			yield dict(
 				parent_id=parent_id,
-				sequence=sequence,
+				sequence=str(sequence),
 				target=final_sequence,
-				organism=organism
+				organism=str(organism),
 			)
 
 			record_counter += 1
 
-	if new_reading:
-		save_file(genbank_file_path, record_counter)
-	
-	post_progress(task_id, new_reading, total_records, record_counter)
-	finish_progress(task_id)
-
-def sliding_window_tagger_gb(genbank_file_path: str, total_records: int | None, new_reading, task_id: int, parent_id: int, seq_max_len=512):
+def sliding_window_tagger_gb(genbank_file_path: str, parent_id: int, seq_max_len=512):
 	record_counter = 0
-	threshold = 5000
 
 	with open(genbank_file_path, "r") as gb_file:
 		for record in SeqIO.parse(gb_file, "genbank"):
-			if record_counter % threshold == 0:
-				post_progress(task_id, new_reading, total_records, record_counter)
 			sequence = record.seq
 
 			if isinstance(record.seq._data, (_UndefinedSequenceData, _PartiallyDefinedSequenceData)) or len(sequence) > seq_max_len or len(sequence) < 3:
@@ -205,20 +181,11 @@ def sliding_window_tagger_gb(genbank_file_path: str, total_records: int | None, 
 
 			record_counter += 1
 
-	if new_reading:
-		save_file(genbank_file_path, record_counter)
-	
-	post_progress(task_id, new_reading, total_records, record_counter)
-	finish_progress(task_id)
-
-def protein_translator_gb(genbank_file_path: str, total_records: int | None, new_reading, task_id: int, parent_id: int, seq_max_len=512):
+def protein_translator_gb(genbank_file_path: str, parent_id: int, seq_max_len=512):
 	record_counter = 0
-	threshold = 5000
 
 	with open(genbank_file_path, "r") as gb_file:
 		for record in SeqIO.parse(gb_file, "genbank"):
-			if record_counter % threshold == 0:
-				post_progress(task_id, new_reading, total_records, record_counter)
 			sequence = record.seq
 
 			if isinstance(record.seq._data, (_UndefinedSequenceData, _PartiallyDefinedSequenceData)) or len(sequence) > seq_max_len or len(sequence) < 3:
@@ -246,9 +213,3 @@ def protein_translator_gb(genbank_file_path: str, total_records: int | None, new
 			)
 
 			record_counter += 1
-
-	if new_reading:
-		save_file(genbank_file_path, record_counter)
-	
-	post_progress(task_id, new_reading, total_records, record_counter)
-	finish_progress(task_id)
