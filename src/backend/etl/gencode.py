@@ -75,7 +75,6 @@ def exin_classifier_gc(gencode_fasta_file_path: str, gencode_annotations_file_pa
 
 		start, end = int(annotation.get("start")) - 1, int(annotation.get("end"))
 		if end-start > seq_max_len:
-			ignored_ones += 1
 			continue
 		chrom = annotation.get("chrom", None)
 		
@@ -84,7 +83,6 @@ def exin_classifier_gc(gencode_fasta_file_path: str, gencode_annotations_file_pa
 		
 		if transcript_id not in transcripts:
 			transcripts[transcript_id] = []
-			transcripts_counter += 1
 		transcripts[transcript_id].append((chrom, start, end, strand, gene))
 
 	for transcript_id, exons in transcripts.items():
@@ -109,7 +107,6 @@ def exin_classifier_gc(gencode_fasta_file_path: str, gencode_annotations_file_pa
 			if i < len(exons) - 1:
 				next_start = exons[i + 1][1]
 				if next_start-end > seq_max_len:
-					ignored_ones += 1
 					continue
 				intron_seq = fasta_sequences.get(chrom, "")[end:next_start]
 
