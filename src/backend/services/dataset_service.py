@@ -35,6 +35,7 @@ def process_raw(settings: CreationSettings) -> CreationSettingsResponse:
 	batch_size = 500
 		
 	if settings.genbank:
+		origin = OriginEnum.genbank
 		genbank_file_path = "data/raw/genbank/file1.gb"
 
 		if settings.genbank.ExInClassifier:
@@ -44,10 +45,10 @@ def process_raw(settings: CreationSettings) -> CreationSettingsResponse:
 			parent_id = create_parent_dataset(ParentDataset(
 				name=f"{approach}-{datetime.now()}",
 				approach=approach,
-				origin=OriginEnum.genbank
+				origin=origin
 			)).id
 
-			task_id = create_progress(progress_type, f"{approach}-{parent_id}").id
+			task_id = create_progress(progress_type, f"origin:{origin}-approach:{approach}-parent:{parent_id}").id
 			response.genbank.ExInClassifier = task_id
 			def background_exin_classifier_gb() -> None:
 				records_generator = exin_classifier_gb(genbank_file_path, parent_id)
@@ -68,10 +69,10 @@ def process_raw(settings: CreationSettings) -> CreationSettingsResponse:
 			parent_id = create_parent_dataset(ParentDataset(
 				name=f"{approach}-{datetime.now()}",
 				approach=approach,
-				origin=OriginEnum.genbank
+				origin=origin
 			)).id
 
-			task_id = create_progress(progress_type, f"{approach}-{parent_id}").id
+			task_id = create_progress(progress_type, f"origin:{origin}-approach:{approach}-parent:{parent_id}").id
 			response.genbank.ExInTranslator = task_id
 
 			def background_exin_translator_gb() -> None:
@@ -93,10 +94,10 @@ def process_raw(settings: CreationSettings) -> CreationSettingsResponse:
 			parent_id = create_parent_dataset(ParentDataset(
 				name=f"{approach}-{datetime.now()}",
 				approach=approach,
-				origin=OriginEnum.genbank
+				origin=origin
 			)).id
 
-			task_id = create_progress(progress_type, f"{approach}-{parent_id}").id
+			task_id = create_progress(progress_type, f"origin:{origin}-approach:{approach}-parent:{parent_id}").id
 			response.genbank.SlidingWindowTagger = task_id
 
 			def background_sliding_window_tagger_gb() -> None:
@@ -118,10 +119,10 @@ def process_raw(settings: CreationSettings) -> CreationSettingsResponse:
 			parent_id = create_parent_dataset(ParentDataset(
 				name=f"{approach}-{datetime.now()}",
 				approach=approach,
-				origin=OriginEnum.genbank
+				origin=origin
 			)).id
 
-			task_id = create_progress(progress_type, f"{approach}-{parent_id}").id
+			task_id = create_progress(progress_type, f"origin:{origin}-approach:{approach}-parent:{parent_id}").id
 			response.genbank.ProteinTranslator = task_id
 
 			def background_protein_translator_gb() -> None:
@@ -137,6 +138,7 @@ def process_raw(settings: CreationSettings) -> CreationSettingsResponse:
 			threading.Thread(target=background_protein_translator_gb).start()
 
 	if settings.gencode:
+		origin = OriginEnum.gencode
 		gencode_fasta_path = "data/raw/gencode/file1.fa"
 		gencode_annotations_path = "data/raw/gencode/file1.gtf"
 		
@@ -147,10 +149,10 @@ def process_raw(settings: CreationSettings) -> CreationSettingsResponse:
 			parent_id = create_parent_dataset(ParentDataset(
 				name=f"{approach}-{datetime.now()}",
 				approach=approach,
-				origin=OriginEnum.gencode
+				origin=origin
 			)).id
 
-			task_id = create_progress(progress_type, f"ExInClassifier-{parent_id}").id		
+			task_id = create_progress(progress_type, f"origin:{origin}-approach:{approach}-parent:{parent_id}").id		
 			response.gencode.ExInClassifier = task_id
 
 			def background_exin_classifier_gc() -> None:
