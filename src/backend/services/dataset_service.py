@@ -4,7 +4,7 @@ from typing import Literal
 
 from etl.genbank import (exin_classifier_gb, exin_translator_gb,
                          protein_translator_gb, sliding_window_tagger_gb)
-from etl.gencode import exin_classifier_gc
+from etl.gencode import exin_classifier_gc, exin_translator_gc
 from models.parent_dataset_model import ApproachEnum, OriginEnum, ParentDataset
 from models.progress_tracker_model import ProgressTypeEnum
 from schemas.datasets_schema import CreationSettings, CreationSettingsResponse
@@ -32,7 +32,7 @@ def initial_configs(path: str, approach: ApproachEnum) -> tuple[int, Literal[Pro
 @handle_exceptions
 def process_raw(settings: CreationSettings) -> CreationSettingsResponse:
 	response = CreationSettingsResponse()
-	batch_size = 500
+	batch_size = 250
 		
 	if settings.genbank:
 		origin = OriginEnum.genbank
@@ -166,5 +166,30 @@ def process_raw(settings: CreationSettings) -> CreationSettingsResponse:
 					save_file(gencode_annotations_path, approach, raw_total)
 
 			threading.Thread(target=background_exin_classifier_gc).start()
+		
+		if settings.gencode.ExInTranslator:
+			approach = ApproachEnum.exin_translator
+			total_records, progress_type = initial_configs(gencode_annotations_path, approach)
+
+			parent_id = create_parent_dataset(ParentDataset(
+				name=f"{approach}-{datetime.now()}",
+				approach=approach,
+				origin=origin
+			)).id
+
+			task_id = create_progress(progress_type, f"origin:{origin}-approach:{approach}-parent:{parent_id}").id		
+			response.gencode.ExInTranslator = task_id
+
+			def background_exin_translator_gc() -> None:
+				records_renerator = exin_translator_gc(gencode_fasta_path, gencode_annotations_path, parent_id)
+
+				accepted_total, raw_total = bulk_create_parent_record_from_generator(records_renerator, batch_size, task_id, total_records)
+
+				update_parent_dataset_record_counter(parent_id, accepted_total)
+
+				if not total_records:
+					save_file(gencode_annotations_path, approach, raw_total)
+
+			threading.Thread(target=background_exin_translator_gc).start()
 
 	return response
