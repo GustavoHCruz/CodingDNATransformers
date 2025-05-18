@@ -184,14 +184,76 @@ def exin_translator_gc(gencode_fasta_file_path: str, gencode_annotations_file_pa
 						target="intron",
 					))
 		
-		final_seq = ""
-		final_target = ""
-		for seq in seqs:
-			sequence, target = seq.values()
-			final_seq += sequence
-			final_target += f"({target}){sequence}({target})"
+		final_seq = "".join(seq["sequence"] for seq in seqs)
+		final_target = "".join(f"({seq['target']}){seq['sequence']}({seq['target']})" for seq in seqs)
 
 		if len(final_seq) < seq_max_len:		
+			yield dict(
+				parent_id=parent_id,
+				sequence=final_seq,
+				target=final_target,
+				organism="Homo sapiens"
+			)
+
+def sliding_window_tagger_gc(gencode_fasta_file_path: str, gencode_annotations_file_path: str, parent_id: int, seq_max_len=512):
+	record_counter = 0
+	transcripts = {}
+
+	fasta_sequences = load_fasta(gencode_fasta_file_path)
+
+	for annotation in parse_gtf(gencode_annotations_file_path):
+		record_counter += 1
+
+		feature = annotation.get("feature", None)
+		attributes = annotation.get("attributes", None)
+		
+		if feature != "exon" or not attributes:
+			continue
+
+		transcript_id = attributes.get("transcript_id", None)
+		strand = annotation.get("strand")
+		
+		if not transcript_id:
+			continue
+
+		start, end = int(annotation.get("start")) - 1, int(annotation.get("end"))
+		if end - start > seq_max_len:
+			continue
+
+		chrom = annotation.get("chrom", None)
+		if chrom not in fasta_sequences:
+			continue
+		
+		if transcript_id not in transcripts:
+			transcripts[transcript_id] = []
+		transcripts[transcript_id].append((chrom, start, end, strand))
+
+	for transcript_id, info in transcripts.items():
+		info.sort(key=lambda x: x[1], reverse=(info[0][3] == "-"))
+
+		sequence_parts = []
+		target_parts = []
+
+		for i, (chrom, start, end, strand) in enumerate(info):
+			exon_seq = fasta_sequences[chrom][start:end]
+			exon_seq = reverse_complement(exon_seq, strand)
+			sequence_parts.append(exon_seq)
+			target_parts.append("E" * len(exon_seq))
+
+			if i < len(info) - 1:
+				next_start = info[i + 1][1]
+				intron_len = next_start - end
+				if intron_len > seq_max_len or intron_len < 1:
+					continue
+				intron_seq = fasta_sequences[chrom][end:next_start]
+				intron_seq = reverse_complement(intron_seq, strand)
+				sequence_parts.append(intron_seq)
+				target_parts.append("I" * len(intron_seq))
+
+		final_seq = "".join(sequence_parts)
+		final_target = "".join(target_parts)
+
+		if len(final_seq) < seq_max_len:
 			yield dict(
 				parent_id=parent_id,
 				sequence=final_seq,
