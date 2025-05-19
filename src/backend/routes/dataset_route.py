@@ -5,7 +5,7 @@ from services.dataset_service import process_raw
 
 router = APIRouter(prefix="/datasets", tags=["Datasets"])
 
-@router.post("/")
+@router.post("/raw")
 def post(data: CreationSettings) -> BaseResponse:
   response = process_raw(data)
   return BaseResponse(status="success", message="Created", data=response)
