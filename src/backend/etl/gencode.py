@@ -1,6 +1,5 @@
 from Bio import SeqIO
-from services.progress_tracker_service import finish_progress
-from services.raw_file_info_service import save_file
+from Bio.Seq import Seq
 
 
 def load_fasta(genome_file_path):
@@ -258,5 +257,64 @@ def sliding_window_tagger_gc(gencode_fasta_file_path: str, gencode_annotations_f
 				parent_id=parent_id,
 				sequence=final_seq,
 				target=final_target,
+				organism="Homo sapiens"
+			)
+
+def protein_translator_gc(gencode_fasta_file_path: str, gencode_annotations_file_path: str, parent_id: int, seq_max_len=512):
+	record_counter = 0
+	transcripts = {}
+
+	fasta_sequences = load_fasta(gencode_fasta_file_path)
+
+	for annotation in parse_gtf(gencode_annotations_file_path):
+		record_counter += 1
+
+		feature = annotation.get("feature", None)
+		attributes = annotation.get("attributes", None)
+		
+		if feature != "exon" or not attributes:
+			continue
+
+		transcript_id = attributes.get("transcript_id", None)
+		strand = annotation.get("strand")
+		
+		if not transcript_id:
+			continue
+
+		start, end = int(annotation.get("start")) - 1, int(annotation.get("end"))
+		if end - start > seq_max_len:
+			continue
+
+		chrom = annotation.get("chrom", None)
+		if chrom not in fasta_sequences:
+			continue
+		
+		if transcript_id not in transcripts:
+			transcripts[transcript_id] = {"exons": [], "strand": strand}
+		transcripts[transcript_id]["exons"].append((chrom, start, end))
+
+	for transcript_id, data in transcripts.items():
+		exons = data["exons"]
+		strand = data["strand"]
+		exons.sort(key=lambda x: x[1], reverse=(strand == "-"))
+
+		sequence = ""
+		for chrom, start, end in exons:
+			seq = fasta_sequences[chrom][start:end]
+			seq = reverse_complement(seq, strand)
+			sequence += seq
+
+		cropped_sequence = sequence[:len(sequence) - (len(sequence) % 3)]
+
+		if len(cropped_sequence) < 3:
+			continue
+
+		protein = str(Seq(cropped_sequence).translate(to_stop=False))
+
+		if len(protein) < seq_max_len:
+			yield dict(
+				parent_id=parent_id,
+				sequence=cropped_sequence,
+				target=protein,
 				organism="Homo sapiens"
 			)
