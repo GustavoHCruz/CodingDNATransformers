@@ -1,6 +1,8 @@
 from typing import Optional
 
-from pydantic import BaseModel
+from models.base_model import ApproachEnum
+from models.parent_dataset_model import OriginEnum
+from pydantic import BaseModel, Field
 
 
 class Approachs(BaseModel):
@@ -22,3 +24,18 @@ class ApproachsResponse(BaseModel):
 class CreationSettingsResponse(BaseModel):
 	genbank: ApproachsResponse = ApproachsResponse()
 	gencode: ApproachsResponse = ApproachsResponse()
+
+class ChildDatasetSettings(BaseModel):
+	name: str
+	size: int
+
+class ProcessedDatasetCreation(BaseModel):
+  batch_name: Optional[str] = None
+  approach: ApproachEnum
+  datasets: list[ChildDatasetSettings] = Field(default_factory=list)
+  seed: Optional[int] = 1234
+
+class ProcessedDatasetCreationResponse(BaseModel):
+	name: str
+	task_id: int
+	

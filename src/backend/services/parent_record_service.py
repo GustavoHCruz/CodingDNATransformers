@@ -1,5 +1,6 @@
-from typing import List
+from typing import Generator, List
 
+from models.base_model import ApproachEnum
 from models.parent_record_model import ParentRecord
 
 seen_global = set()

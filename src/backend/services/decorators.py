@@ -3,32 +3,61 @@ from typing import Callable, Optional
 
 from database.db import get_session
 from fastapi import HTTPException
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from sqlmodel import Session
+from starlette.status import (HTTP_200_OK, HTTP_400_BAD_REQUEST,
+                              HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-def handle_exceptions(func):
-	@wraps(func)
-	def wrapper(*args, **kwargs):
-		try:
-			return func(*args, **kwargs)
-		except HTTPException:
-			raise
-		except Exception as e:
-			raise HTTPException(status_code=500, detail=str(e))
-	return wrapper
+def standard_response(default_status_code: int = HTTP_200_OK, default_message: str = "OK"):
+	def decorator(func):
+		@wraps(func)
+		def wrapper(*args, **kwargs):
+			try:
+				result = func(*args, **kwargs)
+				return JSONResponse(
+					status_code=default_status_code,
+					content={
+						"status": "success",
+						"message": default_message,
+						"data": jsonable_encoder(result)
+					}
+				)
+			except HTTPException as e:
+				return JSONResponse(
+					status_code=e.status_code,
+					content={
+						"status": "error",
+						"message": e.detail
+					}
+				)
+			except ValueError as e:
+				return JSONResponse(
+					status_code=HTTP_400_BAD_REQUEST,
+					content={
+						"status": "error",
+						"message": str(e)
+					}
+				)
+			except Exception as e:
+				return JSONResponse(
+					status_code=HTTP_500_INTERNAL_SERVER_ERROR,
+					content={
+						"status": "error",
+						"message": str(e)
+					}
+				)
+		return wrapper
+	return decorator
 
 def with_session(func: Callable):
 	@wraps(func)
 	def wrapper(*args, session: Optional[Session] = None, **kwargs):
-		own_session = False
-		if session is None:
-			session = get_session()
-			own_session = True
-		
-		try:
+		if session is not None:
 			return func(*args, session=session, **kwargs)
-		finally:
-			if own_session:
-				session.close()
 		
+		with get_session() as session:
+			return func(*args, session=session, **kwargs)
+
 	return wrapper

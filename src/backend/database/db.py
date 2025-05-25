@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 from typing import Generator
 
+from config import config
 from models.base_model import BaseModel
 from models.child_dataset_model import ChildDataset
 from models.child_record_model import ChildRecord
@@ -13,7 +14,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import Session
 
-DATABASE_URL = "sqlite:///./database/splicingsitestransformers.db"
+DATABASE_URL = config.get("database", "url")
 
 engine = create_engine(DATABASE_URL, echo=False, connect_args={"check_same_thread": False})
 
