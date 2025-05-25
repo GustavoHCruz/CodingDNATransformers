@@ -1,0 +1,11 @@
+database:
+  url: "sqlite:///./database/splicingsitestransformers.db"
+  batch_size: 2000
+
+paths:
+  raw_data: "data/raw"
+  models: "data/models"
+
+logging:
+  level: "INFO"
+  file: "logs/app.log"

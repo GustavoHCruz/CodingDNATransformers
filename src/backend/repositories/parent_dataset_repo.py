@@ -38,7 +38,18 @@ def get_parent_dataset(id: int, session: Optional[Session] = None) -> ParentData
   return result
 
 @with_session
-def get_total_amount(approach: ApproachEnum, origin:OriginEnum, session: Optional[Session] = None) -> int:
+def get_total_amount_by_approach(approach: ApproachEnum, session: Optional[Session] = None) -> int:
+  stmt = (
+    select(func.sum(ParentDataset.record_count))
+    .where(ParentDataset.approach == approach)
+  )
+
+  result = session.exec(stmt).one_or_none()
+
+  return result or None
+
+@with_session
+def get_total_amount_by_approach_and_origin(approach: ApproachEnum, origin:OriginEnum, session: Optional[Session] = None) -> int:
   stmt = (
     select(func.sum(ParentDataset.record_count))
     .where(ParentDataset.approach == approach)
@@ -48,3 +59,11 @@ def get_total_amount(approach: ApproachEnum, origin:OriginEnum, session: Optiona
   result = session.exec(stmt).one_or_none()
 
   return result[0] or 0
+
+@with_session
+def get_parents_datasets_ids_by_approach(approach: ApproachEnum, session: Optional[Session] = None) -> list[int]:
+  stmt = select(ParentDataset.id).where(ParentDataset.approach == approach)
+
+  result = session.exec(stmt).all()
+
+  return result

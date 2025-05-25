@@ -1,12 +1,14 @@
+from dtos.progress_tracker_dto import ProgressTrackerGetDTO
 from fastapi import APIRouter
-from services.decorators import handle_exceptions
-from services.progress_tracker_service import get_progress
+from models.progress_tracker_model import ProgressTracker
+from repositories.progress_tracker_repo import get_progress
+from services.decorators import standard_response
 
-from src.backend.schemas.base_response import BaseResponse
+router = APIRouter(prefix="/progress-tracker")
 
-router = APIRouter(prefix="/progress_tracker")
-
-@handle_exceptions
 @router.get("/{progress_tracker_id}")
-def get(progress_tracker_id: int) -> BaseResponse:
-  return BaseResponse(get_progress(progress_tracker_id))
+@standard_response()
+def get(progress_tracker_id: int) -> ProgressTrackerGetDTO:
+  response = get_progress(progress_tracker_id)
+
+  return ProgressTrackerGetDTO.model_validate(response)

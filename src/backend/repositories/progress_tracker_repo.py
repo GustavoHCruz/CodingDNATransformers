@@ -31,11 +31,11 @@ def set_progress(task_id: id, progress: float, session: Optional[Session]) -> Pr
   return record
 
 @with_session
-def get_progress(task_id: id, session: Optional[Session] = None) -> float:
+def get_progress(task_id: id, session: Optional[Session] = None) -> ProgressTracker:
   stmt = select(ProgressTracker).where(ProgressTracker.id == task_id)
   record = session.exec(stmt).first()
 
-  return record.progress
+  return record
 
 @with_session
 def finish_progress(task_id: str, session: Optional[Session] = None) -> ProgressTracker:

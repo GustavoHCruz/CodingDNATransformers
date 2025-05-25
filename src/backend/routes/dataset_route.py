@@ -1,21 +1,21 @@
 from fastapi import APIRouter
-from models.generation_batch_model import GenerationBatch
-from schemas.base_response import BaseResponse
-from schemas.datasets_schema import CreationSettings
-from schemas.processed_datasets_schema import ProcessedDatasetCreation
+from schemas.datasets_schema import (CreationSettings,
+                                     CreationSettingsResponse,
+                                     ProcessedDatasetCreation,
+                                     ProcessedDatasetCreationResponse)
 from services.dataset_service import generate_processed_datasets, process_raw
-from services.decorators import handle_exceptions
+from services.decorators import standard_response
 
 router = APIRouter(prefix="/datasets", tags=["Datasets"])
 
 @router.post("/raw")
-@handle_exceptions
-def post_raw(data: CreationSettings) -> BaseResponse:
+@standard_response()
+def post_raw(data: CreationSettings) -> CreationSettingsResponse:
   response = process_raw(data)
-  return BaseResponse(status="success", message="Created", data=response)
+  return response
 
-@handle_exceptions
 @router.post("/processed")
-def processed_dataset_post(data: ProcessedDatasetCreation) -> GenerationBatch:
+@standard_response()
+def processed_dataset_post(data: ProcessedDatasetCreation) -> list[ProcessedDatasetCreationResponse]:
   response = generate_processed_datasets(data)
   return response
