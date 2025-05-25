@@ -2,21 +2,26 @@ import threading
 from datetime import datetime
 from typing import Callable, Literal, Optional
 
+from database.db import get_session
 from etl.genbank import (exin_classifier_gb, exin_translator_gb,
                          protein_translator_gb, sliding_window_tagger_gb)
 from etl.gencode import (exin_classifier_gc, exin_translator_gc,
                          protein_translator_gc, sliding_window_tagger_gc)
+from models.generation_batch_model import GenerationBatch
 from models.parent_dataset_model import ApproachEnum, OriginEnum, ParentDataset
 from models.progress_tracker_model import ProgressTypeEnum
-from schemas.datasets_schema import CreationSettings, CreationSettingsResponse
-from services.decorators import handle_exceptions
-from services.parent_dataset_service import (
+from repositories.generation_batch_repo import (create_generation_batch,
+                                                get_generation_batch_by_id)
+from repositories.parent_dataset_repo import (
     create_parent_dataset, update_parent_dataset_record_counter)
+from repositories.raw_file_info_repo import (get_by_file_name_and_approach,
+                                             save_file)
+from schemas.datasets_schema import CreationSettings, CreationSettingsResponse
+from schemas.processed_datasets_schema import ProcessedDatasetCreation
+from services.decorators import handle_exceptions
 from services.parent_record_service import \
     bulk_create_parent_record_from_generator
 from services.progress_tracker_service import create_progress
-from services.raw_file_info_service import (get_by_file_name_and_approach,
-                                            save_file)
 
 
 def initial_configs(path: str, approach: ApproachEnum) -> tuple[int, Literal[ProgressTypeEnum.percentage, ProgressTypeEnum.counter]]:
@@ -29,8 +34,6 @@ def initial_configs(path: str, approach: ApproachEnum) -> tuple[int, Literal[Pro
 		progress_type = ProgressTypeEnum.percentage
 
 	return total_records, progress_type
-
-
 
 def launch_background_task(
 	extractor_func: Callable,
@@ -70,7 +73,6 @@ def launch_background_task(
 	threading.Thread(target=background_task).start()
 	return task_id
 
-@handle_exceptions
 def process_raw(settings: CreationSettings) -> CreationSettingsResponse:
 	response = CreationSettingsResponse()
 		
@@ -160,3 +162,13 @@ def process_raw(settings: CreationSettings) -> CreationSettingsResponse:
 			response.gencode.ProteinTranslator = task_id
 
 	return response
+
+def generate_processed_datasets(data: ProcessedDatasetCreation) -> GenerationBatch:
+  new_generation_batch = GenerationBatch(data.name)
+
+  with get_session() as session:
+    new_generation_batch = create_generation_batch(new_generation_batch, session)
+
+    
+
+    get_generation_batch_by_id(new_generation_batch.id, session)

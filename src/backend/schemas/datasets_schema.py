@@ -22,7 +22,3 @@ class ApproachsResponse(BaseModel):
 class CreationSettingsResponse(BaseModel):
 	genbank: ApproachsResponse = ApproachsResponse()
 	gencode: ApproachsResponse = ApproachsResponse()
-
-class ProcessedDatasetCreation:
-	parent_id: int
-	amounts: list[int]
