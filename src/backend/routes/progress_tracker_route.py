@@ -1,6 +1,5 @@
 from dtos.progress_tracker_dto import ProgressTrackerGetDTO
 from fastapi import APIRouter
-from models.progress_tracker_model import ProgressTracker
 from repositories.progress_tracker_repo import get_progress
 from services.decorators import standard_response
 

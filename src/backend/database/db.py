@@ -5,11 +5,14 @@ from config import config
 from models.base_model import BaseModel
 from models.child_dataset_model import ChildDataset
 from models.child_record_model import ChildRecord
+from models.eval_history_model import EvalHistory
 from models.generation_batch_model import GenerationBatch
+from models.model_history_model import ModelHistory
 from models.parent_dataset_model import ParentDataset
 from models.parent_record_model import ParentRecord
 from models.progress_tracker_model import ProgressTracker
 from models.raw_file_info_model import RawFileInfo
+from models.train_history_model import TrainHistory
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import Session
@@ -30,11 +33,14 @@ SessionLocal = sessionmaker(bind=engine, class_=Session, autocommit=False, autof
 models = [
   ChildDataset,
   ChildRecord,
+  EvalHistory,
   GenerationBatch,
+  ModelHistory,
   ParentDataset,
   ParentRecord,
-  ProgressTracker, 
-  RawFileInfo
+  ProgressTracker,
+  RawFileInfo,
+  TrainHistory
 ]
 
 for model in models:
