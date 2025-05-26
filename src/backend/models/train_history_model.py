@@ -1,7 +1,7 @@
 from datetime import time
 
 from models.base_model import BaseModel
-from models.model_history import ModelHistory
+from models.model_history_model import ModelHistory
 from sqlmodel import Field, Relationship
 
 
