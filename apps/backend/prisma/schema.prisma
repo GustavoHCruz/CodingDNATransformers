@@ -1,0 +1,164 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProgressTypeEnum {
+  COUNTER
+  PERCENTAGE
+}
+
+enum ProgressStatusEnum {
+  IN_PROGRESS
+  COMPLETE
+  FAILED
+}
+
+model ProgressTracker {
+  id           Int                @id @default(autoincrement())
+  taskName     String?
+  progress     Float              @default(0.0)
+  progressType ProgressTypeEnum   @default(COUNTER)
+  status       ProgressStatusEnum @default(IN_PROGRESS)
+  info         String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+}
+
+enum ApproachEnum {
+  EXINCLASSIFIER
+  EXINTRANSLATOR
+  SLIDINGWINDOWEXTRACTION
+  PROTEINTRANSLATOR
+}
+
+model RawFileInfo {
+  id           Int          @id @default(autoincrement())
+  fileName     String
+  approach     ApproachEnum
+  totalRecords Int
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+enum OriginEnum {
+  GENBANK
+  GENCODE
+}
+
+model ParentDataset {
+  id          Int          @id @default(autoincrement())
+  name        String
+  approach    ApproachEnum
+  origin      OriginEnum
+  recordCount Int?         @default(0)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  records ParentRecord[]
+}
+
+model ParentRecord {
+  id          Int     @id @default(autoincrement())
+  sequence    String
+  target      String
+  flankBefore String?
+  flankAfter  String?
+  organism    String?
+  gene        String?
+
+  parentDatasetId Int
+  parentDataset   ParentDataset? @relation(fields: [parentDatasetId], references: [id], onDelete: Cascade)
+  ChildRecord     ChildRecord[]
+}
+
+model GenerationBatch {
+  id        Int      @id @default(autoincrement())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  childrenDataset ChildDataset[]
+}
+
+model ChildDataset {
+  id          Int          @id @default(autoincrement())
+  name        String       @unique
+  approach    ApproachEnum
+  recordCount Int?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  batchId         Int
+  GenerationBatch GenerationBatch? @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  records ChildRecord[]
+}
+
+model ChildRecord {
+  id Int @id @default(autoincrement())
+
+  childDatasetId Int
+  childDataset   ChildDataset? @relation(fields: [childDatasetId], references: [id], onDelete: Cascade)
+
+  parentRecordId Int
+  parentRecord   ParentRecord? @relation(fields: [parentRecordId], references: [id], onDelete: Cascade)
+}
+
+model ModelHistory {
+  id           Int          @id @default(autoincrement())
+  name         String
+  approach     ApproachEnum
+  modelName    String
+  path         String
+  seed         Int
+  epochs       Int
+  learningRate Float
+  batchSize    Int
+  accuracy     Float
+  durationSec  Int
+  hideProp     Float?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  parentId Int?
+  parent   ModelHistory?  @relation("ModelParentChild", fields: [parentId], references: [id])
+  children ModelHistory[] @relation("ModelParentChild")
+
+  trainHistories TrainHistory[]
+  evalHistories  EvalHistory[]
+}
+
+model TrainHistory {
+  id          Int      @id @default(autoincrement())
+  epoch       Int
+  loss        Float
+  durationSec Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  modelId Int
+  model   ModelHistory? @relation(fields: [modelId], references: [id], onDelete: Cascade)
+}
+
+model EvalHistory {
+  id          Int      @id @default(autoincrement())
+  loss        Float
+  accuracy    Float
+  durationSec Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  modelId Int
+  model   ModelHistory? @relation(fields: [modelId], references: [id], onDelete: Cascade)
+}
