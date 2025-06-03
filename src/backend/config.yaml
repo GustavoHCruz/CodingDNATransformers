@@ -1,10 +1,11 @@
 database:
-  url: "sqlite:///./database/splicingsitestransformers.db"
+  url: "postgresql://dudi:1234@localhost:5432/python"
   batch_size: 2000
 
 paths:
   raw_data: "data/raw"
   models: "data/models"
+  model_logs_dir: "data/logs"
 
 logging:
   level: "INFO"

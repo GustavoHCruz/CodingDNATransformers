@@ -1,7 +1,8 @@
 from datetime import time
 
 from models.base_model import BaseModel
-from sqlmodel import Field
+from models.model_history_model import ModelHistory
+from sqlmodel import Field, Relationship
 
 
 class EvalHistory(BaseModel, table=True):
@@ -9,3 +10,5 @@ class EvalHistory(BaseModel, table=True):
   loss: float
   acc: float
   duration: time
+
+  model: ModelHistory = Relationship(back_populates="eval_history")

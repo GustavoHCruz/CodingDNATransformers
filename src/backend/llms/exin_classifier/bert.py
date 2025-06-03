@@ -2,23 +2,13 @@ import random
 import time
 
 import torch
+from llms.SplicingTransformers import SplicingTransformers
 from plyer import notification
 from torch.optim import AdamW
-from torch.utils.data import DataLoader, Dataset, random_split
-from transformers import BertForSequenceClassification, BertTokenizer
+from torch.utils.data import DataLoader, Dataset
+from transformers.models.bert import (BertForSequenceClassification,
+                                      BertTokenizer)
 
-from classes.SplicingTransformers import SplicingTransformers
-
-try:
-	from IPython import get_ipython
-	in_notebook = get_ipython() is not None and 'IPKernelApp' in get_ipython().config
-except ImportError:
-	in_notebook = False
-
-if in_notebook:
-	from tqdm.notebook import tqdm
-else:
-	from tqdm import tqdm
 
 class ExInSeqsBERT(SplicingTransformers):
 	class __SpliceBERTDataset__(Dataset):
@@ -57,7 +47,7 @@ class ExInSeqsBERT(SplicingTransformers):
 
 			return torch.tensor(input_ids), torch.tensor(label)
 	
-	def __init__(self, checkpoint="bert-base-uncased", device="cuda", seed=None, notification=False,  logs_dir="logs", models_dir="models", alias=None, log_level="info"):
+	def __init__(self, checkpoint="bert-base-uncased", device="cuda", seed=None, notification=False,  logs_dir="./", models_dir="./", alias=None, log_level="info"):
 		if seed:
 			self._set_seed(seed)
 
