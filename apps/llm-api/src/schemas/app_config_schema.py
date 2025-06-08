@@ -11,6 +11,7 @@ class DatabaseConfig(BaseModel):
 class PathsConfig(BaseModel):
 	raw_data: str
 	models: str
+	model_logs_dir: str
 
 
 class LoggingConfig(BaseModel):

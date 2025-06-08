@@ -17,14 +17,14 @@ from models.raw_file_info_model import RawFileInfo
 
 DATABASE_URL = config.database.url
 
-engine = create_engine(DATABASE_URL, echo=False, connect_args={"check_same_thread": False})
+engine = create_engine(DATABASE_URL, echo=False)
 
-@event.listens_for(engine, "connect")
-def set_sqlite_pragma(dbapi_connection, connection_record) -> None:
-  cursor = dbapi_connection.cursor()
-  cursor.execute("PRAGMA synchronous = OFF")
-  cursor.execute("PRAGMA journal_mode = MEMORY")
-  cursor.close()
+#@event.listens_for(engine, "connect")
+#def set_sqlite_pragma(dbapi_connection, connection_record) -> None:
+#  cursor = dbapi_connection.cursor()
+#  cursor.execute("PRAGMA synchronous = OFF")
+#  cursor.execute("PRAGMA journal_mode = MEMORY")
+#  cursor.close()
 
 SessionLocal = sessionmaker(bind=engine, class_=Session, autocommit=False, autoflush=False, expire_on_commit=False)
 
