@@ -67,8 +67,9 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 /models
 __pycache__
 /cache
-/logs
 .env
 *.db
 .vscode
 .venv
+apps/llm-api/src/data/logs/*
+!apps/llm-api/src/data/logs/.gitkeep
