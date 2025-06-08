@@ -1,7 +1,6 @@
 from typing import Optional
 
 from models.base_model import ApproachEnum
-from models.parent_dataset_model import OriginEnum
 from pydantic import BaseModel, Field
 
 
