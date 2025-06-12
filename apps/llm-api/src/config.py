@@ -1,6 +1,5 @@
 import yaml
-from schemas.app_config_schema import (AppConfig, DatabaseConfig,
-                                       LoggingConfig, PathsConfig)
+from schemas.app_config_schema import (AppConfig, LoggingConfig, PathsConfig)
 
 
 class Config:
@@ -11,10 +10,6 @@ class Config:
     with open(path, "r") as f:
       data = yaml.safe_load(f)
     return AppConfig.model_validate(data)
-    
-  @property
-  def database(self) -> DatabaseConfig:
-    return self._config.database
 
   @property
   def paths(self) -> PathsConfig:
