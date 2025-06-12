@@ -1,12 +1,7 @@
-database:
-  url: "postgresql://dudi:1234@localhost:5432/python"
-  batch_size: 2000
+directories:
+  raw_data: "datasets/"
+  models: "models/"
+  models_logs: "logs/"
 
-paths:
-  raw_data: "data/raw"
-  models: "data/models"
-  model_logs_dir: "data/logs"
-
-logging:
-  level: "INFO"
-  file: "logs/app.log"
+llms:
+  sequenceMaxLength: 512

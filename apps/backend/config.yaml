@@ -1,0 +1,8 @@
+paths:
+  raw_data: 'data/raw'
+  models: 'data/models'
+  model_logs_dir: 'data/logs'
+
+logging:
+  level: 'INFO'
+  file: 'logs/app.log'

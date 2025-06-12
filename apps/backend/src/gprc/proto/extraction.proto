@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package extraction;
+
+service ExtractionService {
+  rpc ExInClassifierGenbank (ExtractionRequest) returns (stream ExtractionResponse);
+  rpc ExInTranslatorGenbank (ExtractionRequest) returns (stream ExtractionResponse);
+  rpc SlidingWindowTaggerGenbank (ExtractionRequest) returns (stream ExtractionResponse);
+  rpc ProteinTranslatorGenbank (ExtractionRequest) returns (stream ExtractionResponse);
+  rpc ExInClassifierGencode (ExtractionRequest) returns (stream ExtractionResponse);
+  rpc ExInTranslatorGencode (ExtractionRequest) returns (stream ExtractionResponse);
+  rpc SlidingWindowTaggerGencode (ExtractionRequest) returns (stream ExtractionResponse);
+  rpc ProteinTranslatorGencode (ExtractionRequest) returns (stream ExtractionResponse);
+}
+
+message ExtractionRequest {
+  int32 parentId;
+  int32 sequenceMaxLength;
+}
+
+message ExtractionResponse {
+  int32 parentId;
+  string sequence;
+  string target;
+  string flankBefore;
+  string flankAfter;
+  string organism;
+  string gene;
+}
