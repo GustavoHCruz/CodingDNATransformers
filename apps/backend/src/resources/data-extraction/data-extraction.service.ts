@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { OriginEnum } from '@prisma/client';
+import { ApproachEnum, OriginEnum } from '@prisma/client';
 import { ParentDatasetService } from '@resources/parent-dataset/parent-dataset.service';
 import { ExtractionGrpcClientService } from 'gprc/extraction.grpc-client.service';
 import { firstValueFrom } from 'rxjs';
@@ -8,6 +8,13 @@ import {
   CreateDataExtractionResponseDto,
 } from './dto/data-extraction.dto';
 
+type ExtractionTask = {
+  function: any,
+  annotationsPath: string,
+  approach: ApproachEnum,
+  origin: OriginEnum
+}
+
 @Injectable()
 export class DataExtractionService {
   constructor(
@@ -15,6 +22,15 @@ export class DataExtractionService {
     private parentDataset: ParentDatasetService,
     private task,
   ) {}
+
+  async extractionTask({
+    function,
+    annotationsPath,
+    approach,
+    origin
+  }: ExtractionTask): number {
+
+  }
 
   async extract(
     data: CreateDataExtractionDto,
@@ -26,6 +42,8 @@ export class DataExtractionService {
     if (genbank) {
       if (genbank.ExInClassifier) {
         origin = OriginEnum.GENBANK;
+
+        response.genbank.ExInClassifier = 1
       }
     }
 
