@@ -2,8 +2,8 @@ import random
 import time
 
 import torch
-from llms.SplicingTransformers import SplicingTransformers
 from plyer import notification
+from src.llms.SplicingTransformers import SplicingTransformers
 from torch.optim import AdamW
 from torch.utils.data import DataLoader, Dataset
 from transformers.models.bert import (BertForSequenceClassification,
