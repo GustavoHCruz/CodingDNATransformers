@@ -47,13 +47,13 @@ def reverse_complement(sequence, strand):
 	
 	return sequence
 
-def exin_classifier_gc(gencode_fasta_file_path: str, gencode_annotations_file_path: str, parent_id: int, seq_max_len=512, flank_max_len=25):
+def exin_classifier_gc(fasta_file_path: str, annotations_file_path: str, seq_max_len=512, flank_max_len=25):
 	record_counter = 0
 	transcripts = {}
 
-	fasta_sequences = load_fasta(gencode_fasta_file_path)
+	fasta_sequences = load_fasta(fasta_file_path)
 
-	for annotation in parse_gtf(gencode_annotations_file_path):
+	for annotation in parse_gtf(annotations_file_path):
 		record_counter += 1
 
 		feature = annotation.get("feature", None)
@@ -104,7 +104,6 @@ def exin_classifier_gc(gencode_fasta_file_path: str, gencode_annotations_file_pa
 			flank_after = fasta_sequences.get(chrom, "")[end:end+flank_max_len]
 
 			yield dict(
-				parent_id=parent_id,
 				sequence=str(reverse_complement(seq, strand)),
 				target="exon",
 				flank_before=str(reverse_complement(flank_before, strand)),
@@ -124,7 +123,6 @@ def exin_classifier_gc(gencode_fasta_file_path: str, gencode_annotations_file_pa
 					flank_after = fasta_sequences.get(chrom, "")[next_start:next_start+flank_max_len]
 
 					yield dict(
-						parent_id=parent_id,
 						sequence=str(reverse_complement(intron_seq, strand)),
 						target="intron",
 						flank_before=str(reverse_complement(flank_before, strand)),
@@ -133,13 +131,13 @@ def exin_classifier_gc(gencode_fasta_file_path: str, gencode_annotations_file_pa
 						gene=str(gene),
 					)
 
-def exin_translator_gc(gencode_fasta_file_path: str, gencode_annotations_file_path: str, parent_id: int, seq_max_len=512):
+def exin_translator_gc(fasta_file_path: str, annotations_file_path: str, seq_max_len=512):
 	record_counter = 0
 	transcripts = {}
 
-	fasta_sequences = load_fasta(gencode_fasta_file_path)
+	fasta_sequences = load_fasta(fasta_file_path)
 
-	for annotation in parse_gtf(gencode_annotations_file_path):
+	for annotation in parse_gtf(annotations_file_path):
 		record_counter += 1
 
 		feature = annotation.get("feature", None)
@@ -208,19 +206,18 @@ def exin_translator_gc(gencode_fasta_file_path: str, gencode_annotations_file_pa
 
 		if len(final_seq) < seq_max_len:		
 			yield dict(
-				parent_id=parent_id,
 				sequence=final_seq,
 				target=final_target,
 				organism="Homo sapiens"
 			)
 
-def sliding_window_tagger_gc(gencode_fasta_file_path: str, gencode_annotations_file_path: str, parent_id: int, seq_max_len=512):
+def sliding_window_tagger_gc(fasta_file_path: str, annotations_file_path: str, seq_max_len=512):
 	record_counter = 0
 	transcripts = {}
 
-	fasta_sequences = load_fasta(gencode_fasta_file_path)
+	fasta_sequences = load_fasta(fasta_file_path)
 
-	for annotation in parse_gtf(gencode_annotations_file_path):
+	for annotation in parse_gtf(annotations_file_path):
 		record_counter += 1
 
 		feature = annotation.get("feature", None)
@@ -284,19 +281,18 @@ def sliding_window_tagger_gc(gencode_fasta_file_path: str, gencode_annotations_f
 
 		if len(final_seq) < seq_max_len:
 			yield dict(
-				parent_id=parent_id,
 				sequence=final_seq,
 				target=final_target,
 				organism="Homo sapiens"
 			)
 
-def protein_translator_gc(gencode_fasta_file_path: str, gencode_annotations_file_path: str, parent_id: int, seq_max_len=512):
+def protein_translator_gc(fasta_file_path: str, annotations_file_path: str, seq_max_len=512):
 	record_counter = 0
 	transcripts = {}
 
-	fasta_sequences = load_fasta(gencode_fasta_file_path)
+	fasta_sequences = load_fasta(fasta_file_path)
 
-	for annotation in parse_gtf(gencode_annotations_file_path):
+	for annotation in parse_gtf(annotations_file_path):
 		record_counter += 1
 
 		feature = annotation.get("feature", None)
@@ -353,7 +349,6 @@ def protein_translator_gc(gencode_fasta_file_path: str, gencode_annotations_file
 
 		if len(protein) < seq_max_len:
 			yield dict(
-				parent_id=parent_id,
 				sequence=cropped_sequence,
 				target=protein,
 				organism="Homo sapiens"
