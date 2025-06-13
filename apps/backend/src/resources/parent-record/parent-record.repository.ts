@@ -18,6 +18,10 @@ export class ParentRecordRepository {
     return this.prisma.parentRecord.create({ data });
   }
 
+  createMany(data: Prisma.ParentRecordCreateManyInput[]) {
+    return this.prisma.parentRecord.createMany({ data });
+  }
+
   update(id: number, data: Prisma.ParentRecordUpdateInput) {
     return this.prisma.parentRecord.update({ where: { id }, data });
   }

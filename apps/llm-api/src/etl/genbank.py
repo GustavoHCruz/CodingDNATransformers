@@ -2,10 +2,10 @@ from Bio import SeqIO
 from Bio.Seq import _PartiallyDefinedSequenceData, _UndefinedSequenceData
 
 
-def exin_classifier_gb(genbank_file_path: str, parent_id: int, seq_max_len=512, flank_max_len=25):
+def exin_classifier_gb(annotation_file_path: str, seq_max_len=512, flank_max_len=25):
 	record_counter = 0
 
-	with open(genbank_file_path, "r") as gb_file:
+	with open(annotation_file_path, "r") as gb_file:
 		for record in SeqIO.parse(gb_file, "genbank"):
 			sequence = record.seq
 
@@ -54,7 +54,6 @@ def exin_classifier_gb(genbank_file_path: str, parent_id: int, seq_max_len=512, 
 					gene = str(gene[0] if type(gene) == list else gene)
 
 					yield dict(
-						parent_id=parent_id,
 						sequence=feature_sequence,
 						target=label,
 						flank_before=before,
@@ -65,10 +64,10 @@ def exin_classifier_gb(genbank_file_path: str, parent_id: int, seq_max_len=512, 
 
 			record_counter += 1
 
-def exin_translator_gb(genbank_file_path: str, parent_id: int, seq_max_len=512):
+def exin_translator_gb(annotation_file_path: str, seq_max_len=512):
 	record_counter = 0
 
-	with open(genbank_file_path, "r") as gb_file:
+	with open(annotation_file_path, "r") as gb_file:
 		for record in SeqIO.parse(gb_file, "genbank"):
 			sequence = record.seq
 
@@ -119,7 +118,6 @@ def exin_translator_gb(genbank_file_path: str, parent_id: int, seq_max_len=512):
 			final_sequence = "".join(final_sequence)
 
 			yield dict(
-				parent_id=parent_id,
 				sequence=str(sequence),
 				target=final_sequence,
 				organism=str(organism),
@@ -127,10 +125,10 @@ def exin_translator_gb(genbank_file_path: str, parent_id: int, seq_max_len=512):
 
 			record_counter += 1
 
-def sliding_window_tagger_gb(genbank_file_path: str, parent_id: int, seq_max_len=512):
+def sliding_window_tagger_gb(annotation_file_path: str, seq_max_len=512):
 	record_counter = 0
 
-	with open(genbank_file_path, "r") as gb_file:
+	with open(annotation_file_path, "r") as gb_file:
 		for record in SeqIO.parse(gb_file, "genbank"):
 			sequence = record.seq
 
@@ -172,7 +170,6 @@ def sliding_window_tagger_gb(genbank_file_path: str, parent_id: int, seq_max_len
 			sequence = str(sequence) if strand == 1 else str(sequence.reverse_complement())
 
 			yield dict(
-				parent_id=parent_id,
 				sequence=sequence,
 				target="".join(splicing_seq),
 				organism=organism
@@ -180,10 +177,10 @@ def sliding_window_tagger_gb(genbank_file_path: str, parent_id: int, seq_max_len
 
 			record_counter += 1
 
-def protein_translator_gb(genbank_file_path: str, parent_id: int, seq_max_len=512):
+def protein_translator_gb(annotation_file_path: str, seq_max_len=512):
 	record_counter = 0
 
-	with open(genbank_file_path, "r") as gb_file:
+	with open(annotation_file_path, "r") as gb_file:
 		for record in SeqIO.parse(gb_file, "genbank"):
 			sequence = record.seq
 
@@ -206,7 +203,6 @@ def protein_translator_gb(genbank_file_path: str, parent_id: int, seq_max_len=51
 				continue
 
 			yield dict(
-				parent_id=parent_id,
 				sequence=str(sequence),
 				target=str(translation[0]),
 				organism=str(organism)

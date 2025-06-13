@@ -27,4 +27,19 @@ export class ProgressTrackerService {
   remove(id: number) {
     return this.repository.remove(id);
   }
+
+  async postPogress(taskId: number, counter: number, total?: number) {
+    let progress = counter;
+    if (total) {
+      progress = (counter * 100) / total;
+    }
+
+    await this.setProgress(taskId, progress);
+  }
+
+  finish(taskId: number) {
+    return this.repository.update(taskId, {
+      status: 'COMPLETE',
+    });
+  }
 }

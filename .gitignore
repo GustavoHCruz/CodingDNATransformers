@@ -1,5 +1,4 @@
-# ===================================================================
-# TypeScript
+# =================================================================== TypeScript
 # compiled output
 /dist
 /node_modules
@@ -58,8 +57,7 @@ pids
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 /generated
-# ===================================================================
-# Python
+# =================================================================== Python
 *.gb
 *.gtf
 *.fa
@@ -73,3 +71,11 @@ __pycache__
 .venv
 apps/llm-api/src/data/logs/*
 !apps/llm-api/src/data/logs/.gitkeep
+
+# PDM
+.py[cod]
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.pdm-python

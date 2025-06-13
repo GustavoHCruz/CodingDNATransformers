@@ -2,7 +2,12 @@ import { Injectable } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as YAML from 'yaml';
-import { ConfigYaml, Directories, Llms } from './interfaces/config.interface';
+import {
+  ConfigYaml,
+  DataExtraction,
+  FilesName,
+  Paths,
+} from './interfaces/config.interface';
 
 @Injectable()
 export class ConfigService {
@@ -18,11 +23,15 @@ export class ConfigService {
     return this.config;
   }
 
-  getDirectories(): Directories {
-    return this.config.directories;
+  getDirectories(): Paths {
+    return this.config.paths;
   }
 
-  getLlms(): Llms {
-    return this.config.llms;
+  getLlms(): FilesName {
+    return this.config.files_name;
+  }
+
+  getDataExtraction(): DataExtraction {
+    return this.config.data_extraction;
   }
 }

@@ -1,7 +1,0 @@
-directories:
-  raw_data: "datasets/"
-  models: "models/"
-  models_logs: "logs/"
-
-llms:
-  sequenceMaxLength: 512

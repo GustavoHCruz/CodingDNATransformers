@@ -1,37 +1,19 @@
 [project]
-name = "src"
+name = "llm-api"
 version = "1.0.0"
-description = ""
+description = "Default template for PDM package"
 authors = [
-    {name = "Gustavo Henrique",email = "ghfc2000@hotmail.com"}
+    {name = "Gustavo Henrique", email = "ghfc2000hotmail.com"},
 ]
+dependencies = ["biopython>=1.85", "grpcio>=1.73.0", "grpcio-tools>=1.73.0"]
+requires-python = "==3.13.*"
 readme = "README.md"
-requires-python = ">=3.12"
-dependencies = [
-    "dotenv (>=0.9.9,<0.10.0)",
-    "biopython (>=1.85,<2.0)",
-    "fastapi (==0.115.9)",
-    "uvicorn (>=0.34.0,<0.35.0)",
-    "gradio (>=5.24.0,<6.0.0)",
-    "numpy (>=2.2.4,<3.0.0)",
-    "pandas (>=2.2.3,<3.0.0)",
-    "plyer (>=2.1.0,<3.0.0)",
-    "transformers (>=4.51.1,<5.0.0)",
-    "pydantic (>=2.11.3,<3.0.0)",
-    "sqlalchemy (>=2.0.40,<3.0.0)",
-    "sqlmodel (>=0.0.24,<0.0.25)",
-    "accelerate (>=1.7.0,<2.0.0)",
-    "psycopg2 (>=2.9.10,<3.0.0)",
-]
+license = {text = "MIT"}
 
 
-[build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+[tool.pdm]
+distribution = false
 
-[tool.poetry]
-name = "splicingsitestransformer"
-
-[tool.poetry.scripts]
-backend-dev = "src.run_scripts:backend_dev"
-backend = "src.run_scripts:backend"
+[tool.pdm.scripts]
+gen-proto = "python -m grpc_tools.protoc -I./src --python_out=./src --grpc_python_out=./src src/grpc/proto/extraction.proto"
+grpc = "python main.py"

@@ -3,6 +3,13 @@ paths:
   models: 'data/models'
   model_logs_dir: 'data/logs'
 
-logging:
-  level: 'INFO'
-  file: 'logs/app.log'
+files_name:
+  genbank:
+    annotations: 'genbank/file1.gb'
+  gencode:
+    annotations: 'gencode/file1.gtf'
+    fasta: 'gencode/file1.fa'
+
+data_extraction:
+  save_batch_len: 500
+  extraction_max_len: 512

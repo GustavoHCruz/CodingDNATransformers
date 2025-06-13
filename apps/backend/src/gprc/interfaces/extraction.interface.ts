@@ -20,8 +20,9 @@ export interface ExtractionService {
 }
 
 export interface ExtractionRequest {
-  parentId: number;
   sequenceMaxLength: number;
+  annotationsPath: string;
+  fastaPath?: string;
 }
 
 export interface ExtractionResponse {
