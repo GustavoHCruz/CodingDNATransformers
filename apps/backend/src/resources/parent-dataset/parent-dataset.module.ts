@@ -6,5 +6,6 @@ import { ParentDatasetService } from './parent-dataset.service';
 @Module({
   controllers: [ParentDatasetController],
   providers: [ParentDatasetRepository, ParentDatasetService],
+  exports: [ParentDatasetService],
 })
 export class ParentDatasetModule {}

@@ -15,5 +15,5 @@ license = {text = "MIT"}
 distribution = false
 
 [tool.pdm.scripts]
-gen-proto = "python -m grpc_tools.protoc -I./src --python_out=./src --grpc_python_out=./src src/grpc/proto/extraction.proto"
-grpc = "python main.py"
+gen-proto = "python -m grpc_tools.protoc -I./src/servers/protos --python_out=./src/servers/generated --grpc_python_out=./src/servers/generated extraction.proto"
+grpc = "python src/main.py"

@@ -1,10 +1,11 @@
 from concurrent import futures
 
+import grpc
 from etl.genbank import (exin_classifier_gb, exin_translator_gb,
                          protein_translator_gb, sliding_window_tagger_gb)
 from etl.gencode import (exin_classifier_gc, exin_translator_gc,
                          protein_translator_gc, sliding_window_tagger_gc)
-from grpc.generated import extraction_pb2, extraction_pb2_grpc
+from servers.generated import extraction_pb2, extraction_pb2_grpc
 
 
 def from_request(req):

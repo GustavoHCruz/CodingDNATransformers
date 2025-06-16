@@ -6,5 +6,6 @@ import { RawFileInfoService } from './raw-file-info.service';
 @Module({
   controllers: [RawFileInfoController],
   providers: [RawFileInfoRepository, RawFileInfoService],
+  exports: [RawFileInfoService],
 })
 export class RawFileInfoModule {}
