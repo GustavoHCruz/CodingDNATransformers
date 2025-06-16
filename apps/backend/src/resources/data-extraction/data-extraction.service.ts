@@ -1,3 +1,5 @@
+import { ExtractionGrpcClientService } from '@grpc/extraction.grpc-client.service';
+import { ExtractionService } from '@grpc/interfaces/extraction.interface';
 import { Injectable } from '@nestjs/common';
 import { ApproachEnum, OriginEnum, ProgressTypeEnum } from '@prisma/client';
 import { ParentDatasetService } from '@resources/parent-dataset/parent-dataset.service';
@@ -5,9 +7,7 @@ import { CreateParentRecordDto } from '@resources/parent-record/dto/create-paren
 import { ParentRecordService } from '@resources/parent-record/parent-record.service';
 import { ProgressTrackerService } from '@resources/progress-tracker/progress-tracker.service';
 import { RawFileInfoService } from '@resources/raw-file-info/raw-file-info.service';
-import { ConfigYaml } from 'config/interfaces/config.interface';
-import { ExtractionGrpcClientService } from 'gprc/extraction.grpc-client.service';
-import { ExtractionService } from 'gprc/interfaces/extraction.interface';
+import { ConfigService } from 'config/config.service';
 import { observableToAsyncIterable } from 'utils/observable-to-async';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -42,7 +42,7 @@ export class DataExtractionService {
     private parentRecordService: ParentRecordService,
     private progressTrackerService: ProgressTrackerService,
     private rawFileInfoService: RawFileInfoService,
-    private configYaml: ConfigYaml,
+    private configYaml: ConfigService,
     private extractionService: ExtractionGrpcClientService,
   ) {}
 
@@ -123,9 +123,9 @@ export class DataExtractionService {
     origin,
     fastaPath,
   }: ExtractionTask): Promise<number> {
-    const batchSize = this.configYaml.data_extraction.save_batch_len;
+    const batchSize = this.configYaml.getDataExtraction().save_batch_len;
     const sequenceMaxLength =
-      this.configYaml.data_extraction.extraction_max_len;
+      this.configYaml.getDataExtraction().extraction_max_len;
     const { totalRecords, progressType } = await this.initialConfiguration(
       annotationsPath,
       approach,
@@ -173,7 +173,7 @@ export class DataExtractionService {
 
     if (genbank) {
       const origin = OriginEnum.GENBANK;
-      const annotationsPath = `${this.configYaml.paths.raw_data}/${this.configYaml.files_name.genbank.annotations}`;
+      const annotationsPath = `${this.configYaml.getPaths().raw_data}/${this.configYaml.getFilesName().genbank.annotations}`;
 
       if (genbank.ExInClassifier) {
         const approach = ApproachEnum.EXINCLASSIFIER;
@@ -222,8 +222,8 @@ export class DataExtractionService {
 
     if (gencode) {
       const origin = OriginEnum.GENCODE;
-      const annotationsPath = `${this.configYaml.paths.raw_data}/${this.configYaml.files_name.gencode.annotations}`;
-      const fastaPath = `${this.configYaml.paths.raw_data}/${this.configYaml.files_name.gencode.fasta}`;
+      const annotationsPath = `${this.configYaml.getPaths().raw_data}/${this.configYaml.getFilesName().gencode.annotations}`;
+      const fastaPath = `${this.configYaml.getPaths().raw_data}/${this.configYaml.getFilesName().gencode.fasta}`;
 
       if (gencode.ExInClassifier) {
         const approach = ApproachEnum.EXINCLASSIFIER;

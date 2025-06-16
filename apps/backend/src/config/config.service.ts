@@ -23,11 +23,11 @@ export class ConfigService {
     return this.config;
   }
 
-  getDirectories(): Paths {
+  getPaths(): Paths {
     return this.config.paths;
   }
 
-  getLlms(): FilesName {
+  getFilesName(): FilesName {
     return this.config.files_name;
   }
 

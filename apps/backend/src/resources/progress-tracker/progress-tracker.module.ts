@@ -6,5 +6,6 @@ import { ProgressTrackerService } from './progress-tracker.service';
 @Module({
   controllers: [ProgressTrackerController],
   providers: [ProgressTrackerRepository, ProgressTrackerService],
+  exports: [ProgressTrackerService],
 })
 export class ProgressTrackerModule {}

@@ -6,5 +6,6 @@ import { ParentRecordService } from './parent-record.service';
 @Module({
   controllers: [ParentRecordController],
   providers: [ParentRecordRepository, ParentRecordService],
+  exports: [ParentRecordService],
 })
 export class ParentRecordModule {}
