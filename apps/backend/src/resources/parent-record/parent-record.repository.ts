@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { ApproachEnum, Prisma } from '@prisma/client';
 import { PrismaService } from '@prisma/prisma.service';
 
 @Injectable()
@@ -12,6 +12,17 @@ export class ParentRecordRepository {
 
   findOne(id: number) {
     return this.prisma.parentRecord.findUnique({ where: { id } });
+  }
+
+  findByApproach(approach: ApproachEnum, limit = 100) {
+    return this.prisma.parentRecord.findMany({
+      where: {
+        parentDataset: {
+          approach,
+        },
+      },
+      take: limit,
+    });
   }
 
   create(data: Prisma.ParentRecordCreateInput) {

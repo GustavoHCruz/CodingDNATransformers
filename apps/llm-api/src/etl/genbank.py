@@ -2,10 +2,10 @@ from Bio import SeqIO
 from Bio.Seq import _PartiallyDefinedSequenceData, _UndefinedSequenceData
 
 
-def exin_classifier_gb(annotation_file_path: str, seq_max_len=512, flank_max_len=25):
+def exin_classifier_gb(annotations_file_path: str, seq_max_len=512, flank_max_len=25):
 	record_counter = 0
 
-	with open(annotation_file_path, "r") as gb_file:
+	with open(annotations_file_path, "r") as gb_file:
 		for record in SeqIO.parse(gb_file, "genbank"):
 			sequence = record.seq
 
@@ -29,7 +29,7 @@ def exin_classifier_gb(annotation_file_path: str, seq_max_len=512, flank_max_len
 					feature_sequence = sequence[location.start:location.end]
 					feature_sequence = str(feature_sequence) if strand == 1 else str(feature_sequence.reverse_complement())
 
-					if len(feature_sequence) > seq_max_len:
+					if len(feature_sequence) > seq_max_len or len(feature_sequence) == 0:
 						continue
 					
 					before = ""
@@ -64,10 +64,10 @@ def exin_classifier_gb(annotation_file_path: str, seq_max_len=512, flank_max_len
 
 			record_counter += 1
 
-def exin_translator_gb(annotation_file_path: str, seq_max_len=512):
+def exin_translator_gb(annotations_file_path: str, seq_max_len=512):
 	record_counter = 0
 
-	with open(annotation_file_path, "r") as gb_file:
+	with open(annotations_file_path, "r") as gb_file:
 		for record in SeqIO.parse(gb_file, "genbank"):
 			sequence = record.seq
 
@@ -125,10 +125,10 @@ def exin_translator_gb(annotation_file_path: str, seq_max_len=512):
 
 			record_counter += 1
 
-def sliding_window_tagger_gb(annotation_file_path: str, seq_max_len=512):
+def sliding_window_tagger_gb(annotations_file_path: str, seq_max_len=512):
 	record_counter = 0
 
-	with open(annotation_file_path, "r") as gb_file:
+	with open(annotations_file_path, "r") as gb_file:
 		for record in SeqIO.parse(gb_file, "genbank"):
 			sequence = record.seq
 
@@ -177,10 +177,10 @@ def sliding_window_tagger_gb(annotation_file_path: str, seq_max_len=512):
 
 			record_counter += 1
 
-def protein_translator_gb(annotation_file_path: str, seq_max_len=512):
+def protein_translator_gb(annotations_file_path: str, seq_max_len=512):
 	record_counter = 0
 
-	with open(annotation_file_path, "r") as gb_file:
+	with open(annotations_file_path, "r") as gb_file:
 		for record in SeqIO.parse(gb_file, "genbank"):
 			sequence = record.seq
 

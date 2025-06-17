@@ -74,7 +74,7 @@ export class DataExtractionService {
     batchSize,
     approach,
   }: ProcessTask) {
-    const batch: CreateParentRecordDto[] = [];
+    let batch: CreateParentRecordDto[] = [];
     let recordCount = 0;
     let raw_total = 0;
 
@@ -85,30 +85,48 @@ export class DataExtractionService {
     });
     const asyncIterable = observableToAsyncIterable(observable);
 
-    for await (const record of asyncIterable) {
-      batch.push({ ...record, parentDatasetId: parentId });
-      raw_total++;
-    }
+    try {
+      for await (const record of asyncIterable) {
+        batch.push({ ...record, parentDatasetId: parentId });
+        raw_total++;
 
-    if (batch.length >= batchSize) {
+        if (batch.length >= batchSize) {
+          const filtered = this.parentRecordService.removeDuplicated(
+            batch,
+            taskId,
+          );
+          recordCount += filtered.length;
+          await this.parentRecordService.createMany(filtered);
+          await this.progressTrackerService.postProgress(
+            taskId,
+            raw_total,
+            totalRecords,
+          );
+
+          batch = [];
+        }
+      }
+
       const filtered = this.parentRecordService.removeDuplicated(batch, taskId);
       recordCount += filtered.length;
       await this.parentRecordService.createMany(filtered);
-      await this.progressTrackerService.postPogress(
+      await this.progressTrackerService.postProgress(
         taskId,
         raw_total,
         totalRecords,
       );
+    } catch {
+      await this.progressTrackerService.finish(taskId, false);
+    } finally {
+      await this.progressTrackerService.finish(taskId);
+      this.parentRecordService.clearTaskState(taskId);
     }
-
-    this.progressTrackerService.finish(taskId);
-    this.parentRecordService.clearTaskState(taskId);
-    this.parentDatasetService.update(parentId, {
+    await this.parentDatasetService.update(parentId, {
       recordCount,
     });
 
     if (!totalRecords) {
-      this.rawFileInfoService.create({
+      await this.rawFileInfoService.create({
         approach,
         fileName: annotationsPath,
         totalRecords: recordCount,

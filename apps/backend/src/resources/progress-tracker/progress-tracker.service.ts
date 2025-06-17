@@ -28,7 +28,7 @@ export class ProgressTrackerService {
     return this.repository.remove(id);
   }
 
-  async postPogress(taskId: number, counter: number, total?: number) {
+  async postProgress(taskId: number, counter: number, total?: number) {
     let progress = counter;
     if (total) {
       progress = (counter * 100) / total;
@@ -37,9 +37,9 @@ export class ProgressTrackerService {
     await this.setProgress(taskId, progress);
   }
 
-  finish(taskId: number) {
+  finish(taskId: number, success = true) {
     return this.repository.update(taskId, {
-      status: 'COMPLETE',
+      status: success ? 'COMPLETE' : 'FAILED',
     });
   }
 }

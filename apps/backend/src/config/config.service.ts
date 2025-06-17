@@ -5,6 +5,7 @@ import * as YAML from 'yaml';
 import {
   ConfigYaml,
   DataExtraction,
+  DatasetGeneration,
   FilesName,
   Paths,
 } from './interfaces/config.interface';
@@ -33,5 +34,9 @@ export class ConfigService {
 
   getDataExtraction(): DataExtraction {
     return this.config.data_extraction;
+  }
+
+  getDatasetGeneration(): DatasetGeneration {
+    return this.config.dataset_generation;
   }
 }

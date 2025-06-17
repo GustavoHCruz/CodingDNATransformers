@@ -76,12 +76,8 @@ def exin_classifier_gc(fasta_file_path: str, annotations_file_path: str, seq_max
 		end = annotation.get("end")
 		if type(start) == str:
 			start = int(start) - 1
-		else:
-			continue
 		if type(end) == str:
 			end = int(end)
-		else:
-			continue
 
 		if end-start > seq_max_len:
 			continue
@@ -159,12 +155,8 @@ def exin_translator_gc(fasta_file_path: str, annotations_file_path: str, seq_max
 		end = annotation.get("end")
 		if type(start) == str:
 			start = int(start) - 1
-		else:
-			continue
 		if type(end) == str:
 			end = int(end)
-		else:
-			continue
 
 		if end-start > seq_max_len:
 			continue
@@ -236,12 +228,8 @@ def sliding_window_tagger_gc(fasta_file_path: str, annotations_file_path: str, s
 		end = annotation.get("end")
 		if type(start) == str:
 			start = int(start) - 1
-		else:
-			continue
 		if type(end) == str:
 			end = int(end)
-		else:
-			continue
 
 		if end - start > seq_max_len:
 			continue
@@ -311,12 +299,8 @@ def protein_translator_gc(fasta_file_path: str, annotations_file_path: str, seq_
 		end = annotation.get("end")
 		if type(start) == str:
 			start = int(start) - 1
-		else:
-			continue
 		if type(end) == str:
 			end = int(end)
-		else:
-			continue
 		
 		if end - start > seq_max_len:
 			continue

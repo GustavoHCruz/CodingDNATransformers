@@ -20,7 +20,8 @@
     "paths": {
       "@grpc/*": ["grpc/*"],
       "@resources/*": ["resources/*"],
-      "@prisma/*": ["prisma/*"]
+      "@prisma/*": ["prisma/*"],
+      "@config/*": ["config/*"]
     }
   }
 }

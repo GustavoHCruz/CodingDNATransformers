@@ -1,7 +1,7 @@
 paths:
-  raw_data: 'data/raw'
-  models: 'data/models'
-  model_logs_dir: 'data/logs'
+  raw_data: 'datasets'
+  models: 'models'
+  model_logs_dir: 'logs'
 
 files_name:
   genbank:
@@ -11,5 +11,8 @@ files_name:
     fasta: 'gencode/file1.fa'
 
 data_extraction:
-  save_batch_len: 500
+  save_batch_len: 2000
   extraction_max_len: 512
+
+dataset_generation:
+  batch_size: 5000
