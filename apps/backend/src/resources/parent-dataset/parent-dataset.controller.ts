@@ -1,16 +1,10 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
-import { ParentDatasetService } from './parent-dataset.service';
-import { CreateParentDatasetDto } from './dto/create-parent-dataset.dto';
+import { Body, Controller, Delete, Get, Param, Patch } from '@nestjs/common';
 import { UpdateParentDatasetDto } from './dto/update-parent-dataset.dto';
+import { ParentDatasetService } from './parent-dataset.service';
 
 @Controller('parent-dataset')
 export class ParentDatasetController {
   constructor(private readonly parentDatasetService: ParentDatasetService) {}
-
-  @Post()
-  create(@Body() createParentDatasetDto: CreateParentDatasetDto) {
-    return this.parentDatasetService.create(createParentDatasetDto);
-  }
 
   @Get()
   findAll() {
@@ -23,7 +17,10 @@ export class ParentDatasetController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateParentDatasetDto: UpdateParentDatasetDto) {
+  update(
+    @Param('id') id: string,
+    @Body() updateParentDatasetDto: UpdateParentDatasetDto,
+  ) {
     return this.parentDatasetService.update(+id, updateParentDatasetDto);
   }
 

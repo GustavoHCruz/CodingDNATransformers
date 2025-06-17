@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ApproachEnum } from '@prisma/client';
 import { CreateParentRecordDto } from './dto/create-parent-record.dto';
 import { ParentRecordRepository } from './parent-record.repository';
 
@@ -58,5 +59,9 @@ export class ParentRecordService {
 
   clearTaskState(taskId: number) {
     this.seenByTask.delete(taskId);
+  }
+
+  findByApproach(approach: ApproachEnum, limit: number) {
+    return this.repository.findByApproach(approach, limit);
   }
 }

@@ -23,8 +23,13 @@ export interface DataExtraction {
   extraction_max_len: number;
 }
 
+export interface DatasetGeneration {
+  batch_size: number;
+}
+
 export interface ConfigYaml {
   paths: Paths;
   files_name: FilesName;
   data_extraction: DataExtraction;
+  dataset_generation: DatasetGeneration;
 }

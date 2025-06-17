@@ -1,3 +1,4 @@
+import os
 from concurrent import futures
 
 import grpc
@@ -9,26 +10,32 @@ from servers.generated import extraction_pb2, extraction_pb2_grpc
 
 
 def from_request(req):
+	base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..", "storage"))
+	annotations_relative_path = req.annotationsPath
+	fasta_relative_path = req.fastaPath
+
+	annotations_file_path = os.path.join(base_dir, annotations_relative_path)
+	fasta_file_path = os.path.join(base_dir, fasta_relative_path)
 	request = dict(
 		seq_max_len = req.sequenceMaxLength,
-		annotations_file_path = req.annotationsPath,
+		annotations_file_path = annotations_file_path
 	)
 
 	if req.fastaPath:
 		request.update({
-			"fasta_file_path": req.fastaPath
+			"fasta_file_path": fasta_file_path
 		})
 	
 	return request
 
 def from_response(res):
 	return dict(
-		sequence = res.sequence,
-		target = res.target,
-		flankBefore = res.flank_before,
-		flankAfter = res.flank_after,
-		organism = res.organism,
-		gene = res.gene
+		sequence = res["sequence"],
+		target = res["target"],
+		flankBefore = res.get("flank_before", ""),
+		flankAfter = res.get("flank_after", ""),
+		organism = res.get("organism", ""),
+		gene = res.get("gene", "")
 	)
 
 class ExtractionService(extraction_pb2_grpc.ExtractionService):
@@ -65,7 +72,7 @@ class ExtractionService(extraction_pb2_grpc.ExtractionService):
 			yield extraction_pb2.ExtractionResponse(**from_response(item))
 
 def serve():
-	server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+	server = grpc.server(futures.ThreadPoolExecutor(max_workers=8))
 	extraction_pb2_grpc.add_ExtractionServiceServicer_to_server(ExtractionService(), server)
 	server.add_insecure_port('[::]:50051')
 	server.start()
