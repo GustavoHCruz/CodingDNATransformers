@@ -93,7 +93,7 @@ model GenerationBatch {
 
 model ChildDataset {
   id          Int          @id @default(autoincrement())
-  name        String       @unique
+  name        String
   approach    ApproachEnum
   recordCount Int?
   createdAt   DateTime     @default(now())

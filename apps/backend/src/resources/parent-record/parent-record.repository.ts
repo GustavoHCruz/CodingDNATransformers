@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ApproachEnum, Prisma } from '@prisma/client';
+import { ApproachEnum, ParentRecord, Prisma } from '@prisma/client';
 import { PrismaService } from '@prisma/prisma.service';
 
 @Injectable()
@@ -16,6 +16,7 @@ export class ParentRecordRepository {
 
   findByApproach(approach: ApproachEnum, limit = 100) {
     return this.prisma.parentRecord.findMany({
+      select: { id: true },
       where: {
         parentDataset: {
           approach,
@@ -23,6 +24,40 @@ export class ParentRecordRepository {
       },
       take: limit,
     });
+  }
+
+  async findByApproachInBatches(
+    approach: ApproachEnum,
+    total: number,
+    batchSize = 100000,
+  ): Promise<ParentRecord[]> {
+    const results: ParentRecord[] = [];
+    let lastId: number | null = null;
+
+    while (results.length < total) {
+      const batch = await this.prisma.parentRecord.findMany({
+        select: { id: true },
+        where: {
+          parentDataset: {
+            approach,
+          },
+          ...(lastId && {
+            id: { gt: lastId },
+          }),
+        },
+        orderBy: { id: 'asc' },
+        take: Math.min(batchSize, total - results.length),
+      });
+
+      if (batch.length === 0) {
+        break;
+      }
+
+      results.push(...batch);
+      lastId = batch[batch.length - 1].id;
+    }
+
+    return results;
   }
 
   create(data: Prisma.ParentRecordCreateInput) {
@@ -39,5 +74,15 @@ export class ParentRecordRepository {
 
   remove(id: number) {
     return this.prisma.parentRecord.delete({ where: { id } });
+  }
+
+  countByApproach(approach: ApproachEnum) {
+    return this.prisma.parentRecord.count({
+      where: {
+        parentDataset: {
+          approach,
+        },
+      },
+    });
   }
 }
