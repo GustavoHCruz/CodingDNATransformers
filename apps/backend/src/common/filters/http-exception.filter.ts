@@ -4,6 +4,7 @@ import {
   ExceptionFilter,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import {
   PrismaClientInitializationError,
@@ -13,8 +14,13 @@ import {
 } from '@prisma/client/runtime/library';
 import { Request, Response } from 'express';
 
+const formatRed = (msg: string) => `\x1b[31m${msg}\x1b[0m`;
+const formatYellow = (msg: string) => `\x1b[33m${msg}\x1b[0m`;
+
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
+  private readonly logger = new Logger('EXCEPTION');
+
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
@@ -42,6 +48,19 @@ export class AllExceptionsFilter implements ExceptionFilter {
       status = HttpStatus.BAD_REQUEST;
       code = 'PRISMA_ERROR';
       message = exception.message;
+    }
+
+    const logMessage = `${request.method} ${request.url} ${status}`;
+
+    if (status === 404) {
+      this.logger.warn(formatYellow(`${logMessage} NOT FOUND`));
+    } else if (status >= 500) {
+      this.logger.error(
+        formatRed(`${logMessage} SERVER ERROR`),
+        (exception as any)?.stack,
+      );
+    } else {
+      this.logger.warn(formatRed(`${logMessage} CLIENT ERROR)`));
     }
 
     const errorResponse = {

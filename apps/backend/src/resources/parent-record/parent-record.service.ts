@@ -64,4 +64,12 @@ export class ParentRecordService {
   findByApproach(approach: ApproachEnum, limit: number) {
     return this.repository.findByApproach(approach, limit);
   }
+
+  findByApproachInBatches(approach: ApproachEnum, limit: number) {
+    return this.repository.findByApproachInBatches(approach, limit);
+  }
+
+  countByApproach(approach: ApproachEnum) {
+    return this.repository.countByApproach(approach);
+  }
 }

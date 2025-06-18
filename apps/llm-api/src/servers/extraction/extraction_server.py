@@ -2,6 +2,7 @@ import os
 from concurrent import futures
 
 import grpc
+from constrants import storage_dir
 from etl.genbank import (exin_classifier_gb, exin_translator_gb,
                          protein_translator_gb, sliding_window_tagger_gb)
 from etl.gencode import (exin_classifier_gc, exin_translator_gc,
@@ -10,12 +11,11 @@ from servers.generated import extraction_pb2, extraction_pb2_grpc
 
 
 def from_request(req):
-	base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..", "storage"))
 	annotations_relative_path = req.annotationsPath
 	fasta_relative_path = req.fastaPath
 
-	annotations_file_path = os.path.join(base_dir, annotations_relative_path)
-	fasta_file_path = os.path.join(base_dir, fasta_relative_path)
+	annotations_file_path = os.path.join(storage_dir, annotations_relative_path)
+	fasta_file_path = os.path.join(storage_dir, fasta_relative_path)
 	request = dict(
 		seq_max_len = req.sequenceMaxLength,
 		annotations_file_path = annotations_file_path

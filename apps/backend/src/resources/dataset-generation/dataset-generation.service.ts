@@ -1,6 +1,6 @@
 import { ConfigService } from '@config/config.service';
-import { Injectable } from '@nestjs/common';
-import { ApproachEnum, ProgressTypeEnum } from '@prisma/client';
+import { ForbiddenException, Injectable } from '@nestjs/common';
+import { ProgressTypeEnum } from '@prisma/client';
 import { ChildDatasetService } from '@resources/child-dataset/child-dataset.service';
 import { ChildRecordService } from '@resources/child-record/child-record.service';
 import { GenerationBatchService } from '@resources/generation-batch/generation-batch.service';
@@ -23,28 +23,11 @@ export class DatasetGenerationService {
   ) {}
 
   private async backgroundChildDatasetCreation(
-    batchGenerationId: number,
-    approach: ApproachEnum,
-    childDatasetName: string,
+    childDatasetId: number,
+    taskId: number,
+    totalRecords: number,
     parentRecordIds: number[],
   ): Promise<number> {
-    const totalRecords = parentRecordIds.length;
-
-    const newChildDataset = await this.childDatasetService.create({
-      name: childDatasetName,
-      approach,
-      batchId: batchGenerationId,
-      recordCount: totalRecords,
-    });
-
-    const task = await this.progressService.create({
-      progressType: ProgressTypeEnum.PERCENTAGE,
-      taskName: `batch:${batchGenerationId} child:${newChildDataset.id}`,
-    });
-
-    const taskId = task.id;
-    const childDatasetId = newChildDataset.id;
-
     const batchSize =
       this.configService.getDatasetGeneration().batch_size || 100;
 
@@ -56,14 +39,13 @@ export class DatasetGenerationService {
 
         const data = batch.map((parentId) => ({
           childDatasetId: childDatasetId,
-          batchId: batchGenerationId,
           parentRecordId: parentId,
         }));
 
         await this.childRecordService.createMany(data);
 
         counter += batch.length;
-        await this.progressService.postProgress(taskId, totalRecords, counter);
+        await this.progressService.postProgress(taskId, counter, totalRecords);
       }
 
       await this.progressService.finish(taskId);
@@ -84,6 +66,19 @@ export class DatasetGenerationService {
     data: CreateDatasetGenerationDto,
   ): Promise<CreateDatasetGenerationDtoResponse[]> {
     const responses: CreateDatasetGenerationDtoResponse[] = [];
+
+    const totalAvailable = await this.parentRecordService.countByApproach(
+      data.approach,
+    );
+    const requestedAmount = data.datasets.reduce(
+      (acc, dataset) => acc + dataset.size,
+      0,
+    );
+    if (requestedAmount > totalAvailable) {
+      throw new ForbiddenException(
+        'Cannot create the datasets, the requested amount is higher than the records on database',
+      );
+    }
 
     const batchName = data.batchName || `batch-${new Date().toISOString()}`;
     const generationBatch = await this.generationBatchService.create({
@@ -113,16 +108,28 @@ export class DatasetGenerationService {
         .slice(recordsSplitStart, recordsSplitEnd)
         .map((parent) => parent.id);
 
-      const taskId = await this.backgroundChildDatasetCreation(
-        generationBatchId,
-        data.approach,
-        child.name,
+      const newChildDataset = await this.childDatasetService.create({
+        name: child.name,
+        approach: data.approach,
+        batchId: generationBatchId,
+        recordCount: child.size,
+      });
+
+      const task = await this.progressService.create({
+        progressType: ProgressTypeEnum.PERCENTAGE,
+        taskName: `batch:${generationBatchId} child:${newChildDataset.id}`,
+      });
+
+      this.backgroundChildDatasetCreation(
+        newChildDataset.id,
+        task.id,
+        child.size,
         parentIdsToUse,
       );
 
       responses.push({
         name: child.name,
-        taskId,
+        taskId: task.id,
       });
 
       recordsSplitStart = recordsSplitEnd;
