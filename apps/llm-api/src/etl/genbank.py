@@ -1,16 +1,14 @@
 from Bio import SeqIO
 from Bio.Seq import _PartiallyDefinedSequenceData, _UndefinedSequenceData
+from Bio.SeqFeature import CompoundLocation
 
 
 def exin_classifier_gb(annotations_file_path: str, seq_max_len=512, flank_max_len=25):
-	record_counter = 0
-
 	with open(annotations_file_path, "r") as gb_file:
 		for record in SeqIO.parse(gb_file, "genbank"):
 			sequence = record.seq
 
 			if (isinstance(record.seq._data, (_UndefinedSequenceData, _PartiallyDefinedSequenceData))):
-				record_counter += 1
 				continue
 
 			organism = record.annotations.get("organism", "")
@@ -62,17 +60,12 @@ def exin_classifier_gb(annotations_file_path: str, seq_max_len=512, flank_max_le
 						gene=gene
 					)
 
-			record_counter += 1
-
 def exin_translator_gb(annotations_file_path: str, seq_max_len=512):
-	record_counter = 0
-
 	with open(annotations_file_path, "r") as gb_file:
 		for record in SeqIO.parse(gb_file, "genbank"):
 			sequence = record.seq
 
 			if len(sequence) > seq_max_len or isinstance(record.seq._data, (_UndefinedSequenceData, _PartiallyDefinedSequenceData)):
-				record_counter += 1
 				continue
 
 			organism = record.annotations.get("organism", "")
@@ -102,7 +95,6 @@ def exin_translator_gb(annotations_file_path: str, seq_max_len=512):
 					})
 			
 			if strand_invalid:
-				record_counter += 1
 				continue
 
 			final_sequence = []
@@ -123,17 +115,12 @@ def exin_translator_gb(annotations_file_path: str, seq_max_len=512):
 				organism=str(organism),
 			)
 
-			record_counter += 1
-
 def sliding_window_tagger_gb(annotations_file_path: str, seq_max_len=512):
-	record_counter = 0
-
 	with open(annotations_file_path, "r") as gb_file:
 		for record in SeqIO.parse(gb_file, "genbank"):
 			sequence = record.seq
 
 			if isinstance(record.seq._data, (_UndefinedSequenceData, _PartiallyDefinedSequenceData)) or len(sequence) > seq_max_len or len(sequence) < 3:
-				record_counter += 1
 				continue
 
 			organism = record.annotations.get("organism", "")
@@ -160,7 +147,6 @@ def sliding_window_tagger_gb(annotations_file_path: str, seq_max_len=512):
 					splicing_seq[start:end] = [char] * (end - start)
 
 			if not strand:
-				record_counter += 1
 				continue
 
 			rest = len(sequence) - len(splicing_seq)
@@ -175,37 +161,32 @@ def sliding_window_tagger_gb(annotations_file_path: str, seq_max_len=512):
 				organism=organism
 			)
 
-			record_counter += 1
-
 def protein_translator_gb(annotations_file_path: str, seq_max_len=512):
-	record_counter = 0
-
 	with open(annotations_file_path, "r") as gb_file:
 		for record in SeqIO.parse(gb_file, "genbank"):
-			sequence = record.seq
-
-			if isinstance(record.seq._data, (_UndefinedSequenceData, _PartiallyDefinedSequenceData)) or len(sequence) > seq_max_len or len(sequence) < 3:
-				record_counter += 1
-				continue
-
 			organism = record.annotations.get("organism", "")
 
-			allow = False
-			translation = None
 			for feature in record.features:
-				if feature.type == "CDS":
-					allow = True
-					translation = feature.qualifiers.get("translation", None)
-					break
-			
-			if not allow or not translation:
-				record_counter += 1
-				continue
+				if feature.type != "CDS":
+					continue
 
-			yield dict(
-				sequence=str(sequence),
-				target=str(translation[0]),
-				organism=str(organism)
-			)
+				if isinstance(feature.location, CompoundLocation) and any(part.ref for part in feature.location.parts):
+					continue
 
-			record_counter += 1
+				translation = feature.qualifiers.get("translation")
+				if not translation:
+					continue
+
+				cds_seq = feature.extract(record.seq)
+
+				if len(cds_seq) < 3 or len(cds_seq) > seq_max_len:
+					continue
+
+				if isinstance(cds_seq._data, _UndefinedSequenceData):
+					continue
+
+				yield {
+					"sequence": str(cds_seq),
+					"target": str(translation[0]),
+					"organism": organism
+				}

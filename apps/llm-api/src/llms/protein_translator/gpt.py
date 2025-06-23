@@ -11,6 +11,8 @@ seed = 1234
 
 checkpoint = "gpt2"
 
+print("loading model")
+
 model = AutoModelForCausalLM.from_pretrained(checkpoint)
 tokenizer = AutoTokenizer.from_pretrained(checkpoint, padding_side="left")
 
@@ -27,9 +29,13 @@ tokenizer.eos_token = "PROT_*"
 tokenizer.add_eos_token = True
 tokenizer.padding_side = "right"
 
+print("loading data")
+
 df = pd.read_csv("dna_proteins.csv")
 
 df = df.drop(["id", "flankBefore", "flankAfter", "gene", "organism", "parentDatasetId"], axis=1)
+
+print("data loaded")
 
 def process_sequence(sequence: str) -> str:
   return f"".join(f"[DNA_{nucl.upper()}]" for nucl in sequence)
@@ -48,7 +54,6 @@ def promptfy(dna_tokens, protein_tokens=None) -> str:
 	if protein_tokens:
 		return f"<|DNA|> {dna_tokens} <|PROTEIN|> {protein_tokens}"
 	return f"<|DNA|> {dna_tokens} <|PROTEIN|>"
-
 
 tokenized_data = []
 for d in data:
@@ -78,6 +83,8 @@ del data
 del df
 
 dataset = Dataset.from_list(tokenized_data)
+
+print("data processes, len=", len(dataset))
 
 del tokenized_data
 

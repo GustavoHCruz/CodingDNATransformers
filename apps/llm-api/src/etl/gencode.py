@@ -286,7 +286,7 @@ def protein_translator_gc(fasta_file_path: str, annotations_file_path: str, seq_
 		feature = annotation.get("feature", None)
 		attributes = annotation.get("attributes", None)
 		
-		if feature != "exon" or not attributes:
+		if feature != "CDS" or not attributes:
 			continue
 
 		transcript_id = attributes.get("transcript_id", None)
@@ -302,9 +302,6 @@ def protein_translator_gc(fasta_file_path: str, annotations_file_path: str, seq_
 		if type(end) == str:
 			end = int(end)
 		
-		if end - start > seq_max_len:
-			continue
-
 		chrom = annotation.get("chrom", None)
 		if chrom not in fasta_sequences:
 			continue
