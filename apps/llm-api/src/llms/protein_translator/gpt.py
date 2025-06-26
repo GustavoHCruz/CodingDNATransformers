@@ -1,142 +1,229 @@
-import pandas as pd
+import csv
+import logging
+import time
+from math import ceil
+from typing import Any, Generator
+
 import torch
-from datasets import Dataset
+from accelerate import Accelerator
 from torch.nn.utils.rnn import pad_sequence
+from torch.optim import AdamW
+from torch.utils.data import DataLoader, IterableDataset
+from tqdm import tqdm
+from transformers.modeling_utils import PreTrainedModel
 from transformers.models.auto.modeling_auto import AutoModelForCausalLM
 from transformers.models.auto.tokenization_auto import AutoTokenizer
-from transformers.trainer import Trainer
-from transformers.training_args import TrainingArguments
+from transformers.optimization import get_scheduler
+from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 
-seed = 1234
-
-checkpoint = "gpt2"
-
-print("loading model")
-
-model = AutoModelForCausalLM.from_pretrained(checkpoint)
-tokenizer = AutoTokenizer.from_pretrained(checkpoint, padding_side="left")
-
-special_tokens = ["[DNA_A]", "[DNA_C]", "[DNA_G]", "[DNA_T]", "[DNA_R]", "[DNA_Y]", "[DNA_S]", "[DNA_W]", "[DNA_K]", "[DNA_M]", "[DNA_B]", "[DNA_D]", "[DNA_H]", "[DNA_V]", "[DNA_N]", "[PROT_A]", "[PROT_C]", "[PROT_D]", "[PROT_E]", "[PROT_F]", "[PROT_G]", "[PROT_H]", "[PROT_I]", "[PROT_K]", "[PROT_L]", "[PROT_M]", "[PROT_N]", "[PROT_P]", "[PROT_Q]", "[PROT_R]", "[PROT_S]", "[PROT_T]", "[PROT_V]", "[PROT_W]", "[PROT_Y]", "[PROT_*]", "[PROT_X]"]
-tokenizer.add_special_tokens({
-    "eos_token": "[PROT_*]",
-    "additional_special_tokens": ["<|DNA|>", "<|PROTEIN|>"]
-})
-tokenizer.add_tokens(special_tokens)
-model.resize_token_embeddings(len(tokenizer), mean_resizing=False)
-
-tokenizer.pad_token = "PROT_*"
-tokenizer.eos_token = "PROT_*"
-tokenizer.add_eos_token = True
-tokenizer.padding_side = "right"
-
-print("loading data")
-
-df = pd.read_csv("dna_proteins.csv")
-
-df = df.drop(["id", "flankBefore", "flankAfter", "gene", "organism", "parentDatasetId"], axis=1)
-
-print("data loaded")
+valid_dna = set("ACGTURYSWKMBDHVN")
+valid_prot = set("ACDEFGHIKLMNPQRSTVWY*X")
 
 def process_sequence(sequence: str) -> str:
-  return f"".join(f"[DNA_{nucl.upper()}]" for nucl in sequence)
+  return "".join(f"[DNA_{nucl.upper()}]" for nucl in sequence if nucl.upper() in valid_dna)
 
 def process_target(target: str) -> str:
-	target = target+"*"
-	target = target[0:target.find("*")+1]
-	return f"".join(f"[PROT_{prot.upper()}]" for prot in target)
+  target = target + "*"
+  target = target[:target.find("*") + 1]
+  return "".join(f"[PROT_{prot.upper()}]" for prot in target if prot.upper() in valid_prot)
 
-df["sequence"] = df["sequence"].apply(process_sequence)
-df["target"] = df["target"].apply(process_target)
+def promptfy(dna_tokens: str, protein_tokens=None) -> str:
+  if protein_tokens:
+    return f"<|DNA|> {dna_tokens} <|PROTEIN|> {protein_tokens}"
+  return f"<|DNA|> {dna_tokens} <|PROTEIN|>"
 
-data = df.to_dict(orient="records")
+class DNADatasetFinetune(IterableDataset):
+  def __init__(self, csv_path: str, tokenizer, dataset_total_length: int, sequence_max_length=1024) -> None:
+    self.csv_path = csv_path
+    self.tokenizer = tokenizer
+    self.max_length = sequence_max_length
+    self._length = dataset_total_length
+  
+  def __len__(self) -> int:
+    return self._length
 
-def promptfy(dna_tokens, protein_tokens=None) -> str:
-	if protein_tokens:
-		return f"<|DNA|> {dna_tokens} <|PROTEIN|> {protein_tokens}"
-	return f"<|DNA|> {dna_tokens} <|PROTEIN|>"
+  def __iter__(self) -> Generator[dict[str, torch.Tensor], Any, None]:
+    with open(self.csv_path, newline='') as csvfile:
+      reader = csv.DictReader(csvfile)
+      for row in reader:
+        seq = process_sequence(row["sequence"])
+        tgt = process_target(row["target"])
 
-tokenized_data = []
-for d in data:
-	partial = promptfy(d["sequence"])
-	full = promptfy(d["sequence"], d["target"])
+        partial = promptfy(seq)
+        full = promptfy(seq, tgt)
 
-	partial_encoded = tokenizer(partial)
-	full_encoded = tokenizer(full, padding="max_length", truncation=True, max_length=1024)
+        partial_encoded = self.tokenizer(partial)
+        full_encoded = self.tokenizer(
+          full,
+          truncation=True,
+          padding="max_length",
+          max_length=self.max_length
+        )
 
-	input_ids = full_encoded["input_ids"]
-	attention_mask = full_encoded["attention_mask"]
+        input_ids = full_encoded["input_ids"]
+        attention_mask = full_encoded["attention_mask"]
 
-	labels = [-100] * len(input_ids)
-	start = min(len(partial_encoded["input_ids"]), 1024)
+        labels = [-100] * len(input_ids)
+        start = min(len(partial_encoded["input_ids"]), len(input_ids))
 
-	for i in range(start, len(input_ids)):
-		if input_ids[i] != tokenizer.pad_token_type_id:
-			labels[i] = input_ids[i]
-	
-	tokenized_data.append({
-		"input_ids": input_ids,
-		"attention_mask": attention_mask,
-		"labels": labels
-	})
+        for i in range(start, len(input_ids)):
+          if input_ids[i] != self.tokenizer.pad_token_id:
+            labels[i] = input_ids[i]
 
-del data
-del df
+        yield {
+          "input_ids": torch.tensor(input_ids),
+          "attention_mask": torch.tensor(attention_mask),
+          "labels": torch.tensor(labels)
+        }
 
-dataset = Dataset.from_list(tokenized_data)
+class FinetuneDataCollator:
+  def __init__(self, tokenizer) -> None:
+    self.tokenizer = tokenizer
+    self.pad_token_id = tokenizer.pad_token_id
 
-print("data processes, len=", len(dataset))
+  def __call__(self, batch) -> dict[str, torch.Tensor]:
+    input_ids = [example["input_ids"] for example in batch]
+    attention_mask = [example["attention_mask"] for example in batch]
+    labels = [example["labels"] for example in batch]
 
-del tokenized_data
+    input_ids_padded = pad_sequence(input_ids, batch_first=True, padding_value=self.pad_token_id)
+    attention_mask_padded = pad_sequence(attention_mask, batch_first=True, padding_value=0)
+    labels_padded = pad_sequence(labels, batch_first=True, padding_value=-100)
 
-train_dataset, eval_dataset = dataset.train_test_split(test_size=0.1, seed=seed).values()
+    return {
+      "input_ids": input_ids_padded,
+      "attention_mask": attention_mask_padded,
+      "labels": labels_padded
+    }
 
-del dataset
+def load_checkpoint(path: str) -> tuple[PreTrainedModel, PreTrainedTokenizerBase]:
+  model = AutoModelForCausalLM.from_pretrained(path)
+  tokenizer = AutoTokenizer.from_pretrained(path)
+  special_tokens = ["[DNA_A]", "[DNA_C]", "[DNA_G]", "[DNA_T]", "[DNA_R]", "[DNA_Y]", "[DNA_S]", "[DNA_W]", "[DNA_K]", "[DNA_M]", "[DNA_B]", "[DNA_D]", "[DNA_H]", "[DNA_V]", "[DNA_N]", "[PROT_A]", "[PROT_C]", "[PROT_D]", "[PROT_E]", "[PROT_F]", "[PROT_G]", "[PROT_H]", "[PROT_I]", "[PROT_K]", "[PROT_L]", "[PROT_M]", "[PROT_N]", "[PROT_P]", "[PROT_Q]", "[PROT_R]", "[PROT_S]", "[PROT_T]", "[PROT_V]", "[PROT_W]", "[PROT_Y]", "[PROT_*]", "[PROT_X]"]
+  tokenizer.add_tokens(special_tokens)
 
-class DataCollator:
-	def __init__(self, tokenizer):
-		self.tokenizer = tokenizer
-		self.pad_token_id = tokenizer.pad_token_id
-	
-	def __call__(self, batch):
-		input_ids = [torch.tensor(example["input_ids"], dtype=torch.long) for example in batch]
-		attention_mask = [torch.tensor(example["attention_mask"], dtype=torch.bool) for example in batch]
-		labels = [torch.tensor(example["labels"], dtype=torch.long) for example in batch]
+  tokenizer.pad_token = "[PROT_*]"
+  tokenizer.eos_token = "[PROT_*]"
 
-		input_ids_padded = pad_sequence(input_ids, batch_first=True, padding_value=self.pad_token_id)
-		attention_mask_padded = pad_sequence(attention_mask, batch_first=True, padding_value=0)
-		labels_padded = pad_sequence(labels, batch_first=True, padding_value=-100)
+  tokenizer.add_special_tokens({
+      "eos_token": "[PROT_*]",
+      "additional_special_tokens": ["<|DNA|>", "<|PROTEIN|>"]
+  })
 
-		return {
-			"input_ids": input_ids_padded,
-			"attention_mask": attention_mask_padded,
-			"labels": labels_padded
-		}
-	
-model.enable_input_require_grads()
-model.config.use_cache = False
+  tokenizer.padding_side = "left"
+  tokenizer.add_eos_token = True
 
-trainer = Trainer(
-  model=model,
-  train_dataset=train_dataset,
-  eval_dataset=eval_dataset,
-  args=TrainingArguments(
-    per_device_train_batch_size=2,
-		gradient_accumulation_steps=8,
-		learning_rate=2e-5,
-		num_train_epochs=1,
-		lr_scheduler_type="cosine",
-		logging_steps=1,
-		bf16=True,
-		optim="adamw_torch",
-		label_names=["labels"],
-		seed=seed,
-		warmup_ratio=0.03,
-		eval_strategy="epoch"
-	),
-  data_collator=DataCollator(tokenizer=tokenizer)
-)
+  model.resize_token_embeddings(len(tokenizer), mean_resizing=False)
 
-trainer.train()
+  return model, tokenizer
 
-model.save_pretrained("./")
-tokenizer.save_pretrained("./")
+def train(accelerator: Accelerator, model: PreTrainedModel, train_dataloader: DataLoader) -> tuple[PreTrainedModel, dict[str, Any]]:
+  epochs = 1
+  lr = 1e-5
+  gradient_accumulation_steps = 8
+  optimizer = AdamW(model.parameters(), lr=lr)
+
+  num_training_steps = epochs * len(train_dataloader)
+  num_warmup_steps = int(0.03 * num_training_steps)
+
+  lr_scheduler = get_scheduler(
+    name="cosine",
+    optimizer=optimizer,
+    num_warmup_steps=num_warmup_steps,
+    num_training_steps=num_training_steps
+  )
+
+  model, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+    model,
+    optimizer,
+    train_dataloader,
+    lr_scheduler
+  )
+
+  train_dataloder_len = len(train_dataloader)
+  history = {"epoch": [], "time": [], "train_loss": [], "lr": []}
+  start_time = time.time()
+
+  train_bar = tqdm(total=ceil(num_training_steps/gradient_accumulation_steps), desc=f"Steps", leave=True, disable=not accelerator.is_local_main_process)
+  global_step = 0
+
+  model.train()
+  for epoch in range(epochs):
+    train_loss = 0.0
+
+    accumulated_loss = 0.0
+    for batch_idx, batch in enumerate(train_dataloader):
+      outputs = model(**batch)
+      loss = outputs.loss / gradient_accumulation_steps
+
+      accelerator.backward(loss)
+      accumulated_loss += loss.item()
+
+      if (batch_idx + 1) % gradient_accumulation_steps == 0 or (batch_idx + 1 == train_dataloder_len):
+        accelerator.clip_grad_norm_(model.parameters(), max_norm=0.5)
+
+        optimizer.step()
+        lr_scheduler.step()
+        optimizer.zero_grad()
+
+        loss_val = loss.item()
+        train_loss += loss_val
+        global_step += 1
+
+        current_epoch_fraction = epoch + (batch_idx / train_dataloder_len)
+        current_lr = lr_scheduler.get_last_lr()[0]
+
+        train_bar.update(gradient_accumulation_steps)
+        train_bar.set_postfix(loss=loss_val, lr=current_lr, epoch=round(current_epoch_fraction, 2))
+
+        history["epoch"].append(round(current_epoch_fraction, 2))
+        history["train_loss"].append(accumulated_loss)
+        history["lr"].append(current_lr)
+        history["time"].append(time.time() - start_time)
+
+        accumulated_loss = 0.0
+
+    train_bar.close()
+
+  return model, history
+
+def main() -> None:
+  train_csv_path = "dna_proteins.csv"
+  checkpoint = "gpt2"
+  output_path = "./ProtGPT"
+
+  accelerator = Accelerator()
+  is_main_process = accelerator.is_main_process
+  num_gpus = accelerator.num_processes
+  logger = logging.getLogger(__name__)
+
+  logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+  if is_main_process:
+    logger.info(f"Selected Model: {checkpoint}")
+
+  model, tokenizer = load_checkpoint(checkpoint)
+
+  train_dataset = DNADatasetFinetune(csv_path=train_csv_path, tokenizer=tokenizer, dataset_total_length=681899)
+  train_dataloader = DataLoader(train_dataset, batch_size=2, collate_fn=FinetuneDataCollator(tokenizer))
+
+  if is_main_process:
+    logger.info(f"Starting fine-tune with {num_gpus} GPU(s)")
+
+  model, _ = train(accelerator, model, train_dataloader)
+  
+  model = accelerator.unwrap_model(model)
+
+  if is_main_process:
+    logger.info(f"Saving finetuned model at {output_path}")
+    model.save_pretrained(output_path)
+    tokenizer.save_pretrained(output_path)
+  
+  if is_main_process:
+    logger.info(f"Finishing execution")
+
+  accelerator.wait_for_everyone()
+  accelerator.end_training()
+
+if __name__ == "__main__":
+    main()
