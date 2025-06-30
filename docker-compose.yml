@@ -1,4 +1,12 @@
+version: "3.9"
+
 services:
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    restart: always
+
   db:
     image: postgres:16
     container_name: database
@@ -15,23 +23,41 @@ services:
       - .env
 
   backend:
-    build: ./src/backend
+    build: ./apps/backend
     container_name: backend
     ports:
       - "3000:3000"
     depends_on:
       - db
+      - redis
 
-  llm-api:
-    build: ./src/llm-api
-    container_name: llm-api
+  data-worker:
+    build: ./apps/data-worker
+    container_name: data-worker
     ports:
       - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./apps/shared:/app/shared
+      - ./storage:/app/storage
+    depends_on:
+      - backend
+
+  llm-worker:
+    build: ./apps/llm-worker
+    container_name: llm-worker
+    ports:
+      - "8001:8001"
     runtime: nvidia
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
     depends_on:
       - backend
+      - redis
+    volumes:
+      - ./apps/shared:/app/shared
+      - ./storage:/app/storage
 
   frontend:
     build: ./src/frontend

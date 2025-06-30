@@ -1,6 +1,7 @@
 import { ConfigModule } from '@config/config.module';
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '@prisma/prisma.module';
+import { RedisModule } from '@redis/redis.module';
 import { ChildDatasetModule } from '@resources/child-dataset/child-dataset.module';
 import { ChildRecordModule } from '@resources/child-record/child-record.module';
 import { DataExtractionModule } from '@resources/data-extraction/data-extraction.module';
@@ -16,16 +17,17 @@ import { AppService } from './app.service';
 @Module({
   imports: [
     ConfigModule,
-    DataExtractionModule,
     PrismaModule,
-    ProgressTrackerModule,
-    ParentDatasetModule,
-    ParentRecordModule,
-    RawFileInfoModule,
+    RedisModule,
     ChildDatasetModule,
     ChildRecordModule,
-    GenerationBatchModule,
+    DataExtractionModule,
     DatasetGenerationModule,
+    GenerationBatchModule,
+    ParentDatasetModule,
+    ParentRecordModule,
+    ProgressTrackerModule,
+    RawFileInfoModule,
   ],
   controllers: [AppController],
   providers: [AppService],

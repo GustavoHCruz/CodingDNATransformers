@@ -21,7 +21,8 @@
       "@grpc/*": ["grpc/*"],
       "@resources/*": ["resources/*"],
       "@prisma/*": ["prisma/*"],
-      "@config/*": ["config/*"]
+      "@config/*": ["config/*"],
+      "@redis/*": ["redis/*"]
     }
   }
 }
