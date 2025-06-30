@@ -1,14 +1,22 @@
 import os
+import sys
+
+from config import shared_dir, storage_dir
+
+sys.path.insert(0, str(shared_dir))
+sys.path.insert(0, str(storage_dir))
+
 from concurrent import futures
 
 import grpc
-from constrants import storage_dir
+from dotenv import dotenv_values, load_dotenv
 from etl.genbank import (exin_classifier_gb, exin_translator_gb,
                          protein_translator_gb, sliding_window_tagger_gb)
 from etl.gencode import (exin_classifier_gc, exin_translator_gc,
                          protein_translator_gc, sliding_window_tagger_gc)
-from servers.generated import extraction_pb2, extraction_pb2_grpc
+from generated import data_pb2, data_pb2_grpc
 
+load_dotenv()
 
 def from_request(req):
 	annotations_relative_path = req.annotationsPath
@@ -28,7 +36,7 @@ def from_request(req):
 	
 	return request
 
-def from_response(res):
+def from_response(res) -> dict[str, str]:
 	return dict(
 		sequence = res["sequence"],
 		target = res["target"],
@@ -38,43 +46,46 @@ def from_response(res):
 		gene = res.get("gene", "")
 	)
 
-class ExtractionService(extraction_pb2_grpc.ExtractionService):
+class ExtractionService(data_pb2_grpc.ExtractionService):
 	def ExInClassifierGenbank(self, request, context: grpc.ServicerContext):
 		for item in exin_classifier_gb(**from_request(request)):
-			yield extraction_pb2.ExtractionResponse(**from_response(item))
+			yield data_pb2.ExtractionResponse(**from_response(item))
 
 	def ExInTranslatorGenbank(self, request, context: grpc.ServicerContext):
 		for item in exin_translator_gb(**from_request(request)):
-			yield extraction_pb2.ExtractionResponse(**from_response(item))
+			yield data_pb2.ExtractionResponse(**from_response(item))
 	
 	def SlidingWindowTaggerGenbank(self, request, context: grpc.ServicerContext):
 		for item in sliding_window_tagger_gb(**from_request(request)):
-			yield extraction_pb2.ExtractionResponse(**from_response(item))
+			yield data_pb2.ExtractionResponse(**from_response(item))
 
 	def ProteinTranslatorGenbank(self, request, context: grpc.ServicerContext):
 		for item in protein_translator_gb(**from_request(request)):
-			yield extraction_pb2.ExtractionResponse(**from_response(item))
+			yield data_pb2.ExtractionResponse(**from_response(item))
 
 	def ExInClassifierGencode(self, request, context: grpc.ServicerContext):
 		for item in exin_classifier_gc(**from_request(request)):
-			yield extraction_pb2.ExtractionResponse(**from_response(item))
+			yield data_pb2.ExtractionResponse(**from_response(item))
 
 	def ExInTranslatorGencode(self, request, context: grpc.ServicerContext):
 		for item in exin_translator_gc(**from_request(request)):
-			yield extraction_pb2.ExtractionResponse(**from_response(item))
+			yield data_pb2.ExtractionResponse(**from_response(item))
 	
 	def SlidingWindowTaggerGencode(self, request, context: grpc.ServicerContext):
 		for item in sliding_window_tagger_gc(**from_request(request)):
-			yield extraction_pb2.ExtractionResponse(**from_response(item))
+			yield data_pb2.ExtractionResponse(**from_response(item))
 
 	def ProteinTranslatorGencode(self, request, context: grpc.ServicerContext):
 		for item in protein_translator_gc(**from_request(request)):
-			yield extraction_pb2.ExtractionResponse(**from_response(item))
+			yield data_pb2.ExtractionResponse(**from_response(item))
 
-def serve():
+def server():
+	config = dotenv_values(".env")
+	port = config["PORT"]
+
 	server = grpc.server(futures.ThreadPoolExecutor(max_workers=8))
-	extraction_pb2_grpc.add_ExtractionServiceServicer_to_server(ExtractionService(), server)
-	server.add_insecure_port('[::]:50051')
+	data_pb2_grpc.add_ExtractionServiceServicer_to_server(ExtractionService(), server)
+	server.add_insecure_port(f"[::]:{port}")
 	server.start()
-	print("gRPC Server is running on port 50051...")
+	print(f"gRPC Server is running on port {port}...")
 	server.wait_for_termination()
