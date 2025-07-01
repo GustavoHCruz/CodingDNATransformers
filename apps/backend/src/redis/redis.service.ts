@@ -4,7 +4,7 @@ import Redis from 'ioredis';
 @Injectable()
 export class RedisService {
   private client = new Redis({
-    host: 'redis',
+    host: process.env.REDIS_HOST ?? 'localhost',
     port: process.env.REDIS_URL ? parseInt(process.env.REDIS_URL) : 6379,
   });
 
@@ -19,7 +19,7 @@ export class RedisService {
 
   async subscribe(channel: string, callback: (msg: string) => void) {
     const sub = new Redis({
-      host: 'redis',
+      host: process.env.REDIS_HOST ?? 'localhost',
       port: process.env.REDIS_URL ? parseInt(process.env.REDIS_URL) : 6379,
     });
     await sub.subscribe(channel);
