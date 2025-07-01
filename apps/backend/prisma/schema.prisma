@@ -102,7 +102,9 @@ model ChildDataset {
   batchId         Int
   GenerationBatch GenerationBatch? @relation(fields: [batchId], references: [id], onDelete: Cascade)
 
-  records ChildRecord[]
+  records      ChildRecord[]
+  trainHistory TrainHistory[] @relation(name: "trainDataset")
+  evalHistory  TrainHistory[] @relation(name: "evalDataset")
 }
 
 model ChildRecord {
@@ -116,20 +118,13 @@ model ChildRecord {
 }
 
 model ModelHistory {
-  id           Int          @id @default(autoincrement())
-  name         String
-  approach     ApproachEnum
-  modelName    String
-  path         String
-  seed         Int
-  epochs       Int
-  learningRate Float
-  batchSize    Int
-  accuracy     Float
-  durationSec  Int
-  hideProp     Float?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  id             Int          @id @default(autoincrement())
+  modelAlias     String
+  checkpointName String
+  approach       ApproachEnum
+  path           String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   parentId Int?
   parent   ModelHistory?  @relation("ModelParentChild", fields: [parentId], references: [id])
@@ -140,15 +135,27 @@ model ModelHistory {
 }
 
 model TrainHistory {
-  id          Int      @id @default(autoincrement())
-  epoch       Int
-  loss        Float
-  durationSec Int
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                   Int      @id @default(autoincrement())
+  learningRate         Int
+  batchSize            Int
+  gradientAccumulation Int
+  warmupRatio          Float
+  epochs               Int
+  hideProb             Float
+  loss                 Float
+  durationSec          Int
+  seed                 Int
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   modelId Int
   model   ModelHistory? @relation(fields: [modelId], references: [id], onDelete: Cascade)
+
+  trainDatasetId Int?
+  trainDataset   ChildDataset? @relation(name: "trainDataset", fields: [trainDatasetId], references: [id], onDelete: SetNull)
+
+  evalDatasetId Int?
+  evalDataset   ChildDataset? @relation(name: "evalDataset", fields: [evalDatasetId], references: [id], onDelete: SetNull)
 }
 
 model EvalHistory {
