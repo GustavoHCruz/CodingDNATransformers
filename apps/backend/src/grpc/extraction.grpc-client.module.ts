@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ClientsModule, Transport } from '@nestjs/microservices';
+import { SHARED_DIR } from 'common/constrants';
 import { join } from 'path';
 import { ExtractionGrpcClientService } from './extraction.grpc-client.service';
 
@@ -11,7 +12,7 @@ import { ExtractionGrpcClientService } from './extraction.grpc-client.service';
         transport: Transport.GRPC,
         options: {
           package: 'extraction',
-          protoPath: join(__dirname, 'proto/extraction.proto'),
+          protoPath: join(SHARED_DIR, 'protos/data.proto'),
           url: 'localhost:50051',
         },
       },

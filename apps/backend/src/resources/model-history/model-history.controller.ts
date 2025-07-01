@@ -4,25 +4,25 @@ import { ModelHistoryService } from './model-history.service';
 
 @Controller('model-history')
 export class ModelHistoryController {
-  constructor(private readonly modelHistoryyService: ModelHistoryService) {}
+  constructor(private readonly modelHistoryService: ModelHistoryService) {}
 
   @Get()
   findAll() {
-    return this.modelHistoryyService.findAll();
+    return this.modelHistoryService.findAll();
   }
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.modelHistoryyService.findOne(+id);
+    return this.modelHistoryService.findOne(+id);
   }
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() data: UpdateModelHistoryDto) {
-    return this.modelHistoryyService.update(+id, data);
+    return this.modelHistoryService.update(+id, data);
   }
 
   @Delete(':id')
   remove(@Param('id') id: string) {
-    return this.modelHistoryyService.remove(+id);
+    return this.modelHistoryService.remove(+id);
   }
 }
