@@ -7,6 +7,7 @@ import { ChildRecordModule } from '@resources/child-record/child-record.module';
 import { DataExtractionModule } from '@resources/data-extraction/data-extraction.module';
 import { DatasetGenerationModule } from '@resources/dataset-generation/dataset-generation.module';
 import { GenerationBatchModule } from '@resources/generation-batch/generation-batch.module';
+import { ModelHistoryModule } from '@resources/model-history/model-history.module';
 import { ParentDatasetModule } from '@resources/parent-dataset/parent-dataset.module';
 import { ParentRecordModule } from '@resources/parent-record/parent-record.module';
 import { ProgressTrackerModule } from '@resources/progress-tracker/progress-tracker.module';
@@ -24,6 +25,7 @@ import { AppService } from './app.service';
     DataExtractionModule,
     DatasetGenerationModule,
     GenerationBatchModule,
+    ModelHistoryModule,
     ParentDatasetModule,
     ParentRecordModule,
     ProgressTrackerModule,
