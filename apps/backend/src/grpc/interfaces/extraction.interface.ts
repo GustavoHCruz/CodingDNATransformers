@@ -1,5 +1,21 @@
 import { Observable } from 'rxjs';
 
+export interface ExtractionRequest {
+  sequenceMaxLength: number;
+  annotationsPath: string;
+  fastaPath?: string;
+}
+
+export interface ExtractionResponse {
+  parentId: number;
+  sequence: string;
+  target: string;
+  flankBefore: string;
+  flankAfter: string;
+  organism: string;
+  gene: string;
+}
+
 export interface ExtractionService {
   ExInClassifierGenbank(req: ExtractionRequest): Observable<ExtractionResponse>;
   ExInTranslatorGenbank(req: ExtractionRequest): Observable<ExtractionResponse>;
@@ -17,20 +33,4 @@ export interface ExtractionService {
   ProteinTranslatorGencode(
     req: ExtractionRequest,
   ): Observable<ExtractionResponse>;
-}
-
-export interface ExtractionRequest {
-  sequenceMaxLength: number;
-  annotationsPath: string;
-  fastaPath?: string;
-}
-
-export interface ExtractionResponse {
-  parentId: number;
-  sequence: string;
-  target: string;
-  flankBefore: string;
-  flankAfter: string;
-  organism: string;
-  gene: string;
 }

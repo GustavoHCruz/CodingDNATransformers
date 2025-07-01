@@ -12,6 +12,7 @@ import { ParentDatasetModule } from '@resources/parent-dataset/parent-dataset.mo
 import { ParentRecordModule } from '@resources/parent-record/parent-record.module';
 import { ProgressTrackerModule } from '@resources/progress-tracker/progress-tracker.module';
 import { RawFileInfoModule } from '@resources/raw-file-info/raw-file-info.module';
+import { TrainHistoryModule } from '@resources/train-history/train-history.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -30,6 +31,7 @@ import { AppService } from './app.service';
     ParentRecordModule,
     ProgressTrackerModule,
     RawFileInfoModule,
+    TrainHistoryModule,
   ],
   controllers: [AppController],
   providers: [AppService],
