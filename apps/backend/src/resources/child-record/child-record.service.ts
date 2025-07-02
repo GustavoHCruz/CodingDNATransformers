@@ -22,6 +22,10 @@ export class ChildRecordService {
     return this.repository.findOne(id);
   }
 
+  streamFindAllByChildDatasetId(childDatasetId: number) {
+    return this.repository.streamFindAllByChildDatasetId(childDatasetId);
+  }
+
   remove(id: number) {
     return this.repository.remove(id);
   }
