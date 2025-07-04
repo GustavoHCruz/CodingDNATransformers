@@ -13,7 +13,7 @@ import { ExtractionGrpcClientService } from './extraction.grpc-client.service';
         options: {
           package: 'extraction',
           protoPath: join(SHARED_DIR, 'protos/data.proto'),
-          url: 'localhost:50051',
+          url: process.env.EXTRACTION_SERVICE_URL || 'localhost:50051',
         },
       },
     ]),

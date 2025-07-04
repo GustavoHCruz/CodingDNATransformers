@@ -4,14 +4,17 @@ import { SHARED_DIR } from 'common/constrants';
 import { format } from 'fast-csv';
 import { createWriteStream } from 'fs';
 import path from 'path';
+import { CreateModelDto } from './dto/createModel.dto';
+
+const GPTS_MODELS = ['gpt2', 'gpt2-medium'];
 
 const ALLOWED_MODELS: Record<string, (modelName: string) => boolean> = {
   EXINCLASSIFIER: (name) =>
-    ['gpt2', 'bert-base-uncased', 'dnabert'].includes(name),
-  EXINTRANSLATOR: (name) => ['gpt2', 't5-base'].includes(name),
+    [...GPTS_MODELS, 'bert-base-uncased', 'dnabert'].includes(name),
+  EXINTRANSLATOR: (name) => [...GPTS_MODELS, 't5-base'].includes(name),
   SLIDINGWINDOWEXTRACTION: (name) =>
-    ['gpt2', 'bert-base-uncased', 'dnabert'].includes(name),
-  PROTEINTRANSLATOR: (name) => ['gpt2', 't5-base'].includes(name),
+    [...GPTS_MODELS, 'bert-base-uncased', 'dnabert'].includes(name),
+  PROTEINTRANSLATOR: (name) => [...GPTS_MODELS, 't5-base'].includes(name),
 };
 
 @Injectable()
@@ -36,5 +39,9 @@ export class LlmService {
     }
 
     stream.end();
+  }
+
+  async createModel(data: CreateModelDto) {
+    const { approach, checkpointName, modelAlias, parentId } = data;
   }
 }

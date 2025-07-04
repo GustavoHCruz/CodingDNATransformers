@@ -122,7 +122,6 @@ model ModelHistory {
   modelAlias     String
   checkpointName String
   approach       ApproachEnum
-  path           String
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
@@ -141,7 +140,8 @@ model TrainHistory {
   gradientAccumulation Int
   warmupRatio          Float
   epochs               Int
-  hideProb             Float
+  hideProb             Float?
+  lora                 Boolean  @default(false)
   loss                 Float
   durationSec          Int
   seed                 Int
