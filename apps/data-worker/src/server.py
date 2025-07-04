@@ -1,10 +1,10 @@
 import os
 import sys
 
-from config import shared_dir, storage_dir
+from config import SHARED_DIR, STORAGE_DIR
 
-sys.path.insert(0, str(shared_dir))
-sys.path.insert(0, str(storage_dir))
+sys.path.insert(0, str(SHARED_DIR))
+sys.path.insert(0, str(STORAGE_DIR))
 
 from concurrent import futures
 
@@ -22,8 +22,8 @@ def from_request(req):
 	annotations_relative_path = req.annotationsPath
 	fasta_relative_path = req.fastaPath
 
-	annotations_file_path = os.path.join(storage_dir, annotations_relative_path)
-	fasta_file_path = os.path.join(storage_dir, fasta_relative_path)
+	annotations_file_path = os.path.join(STORAGE_DIR, annotations_relative_path)
+	fasta_file_path = os.path.join(STORAGE_DIR, fasta_relative_path)
 	request = dict(
 		seq_max_len = req.sequenceMaxLength,
 		annotations_file_path = annotations_file_path

@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package llm;
+
+import "google/protobuf/empty.proto";
+
+service LlmService {
+  rpc CreateModel (CreateModelRequest) returns (google.protobuf.Empty);
+  rpc TrainModel (TrainModelRequest) returns (google.protobuf.Empty);
+  rpc EvalModel (EvalModelRequest) returns (google.protobuf.Empty);
+  rpc Predict (PredictRequest) returns (google.protobuf.Empty);
+}
+
+message CreateModelRequest {
+  string uuid = 1;
+  string modelAlias = 2;
+  string checkpointName = 3;
+}
+
+message TrainModelRequest {
+  string uuid = 1;
+  string modelAlias = 2;
+  float learningRate = 3;
+  int32 batchSize = 4;
+  int32 gradientAccumulation = 5;
+  float warmupRatio = 6;
+  int32 epochs = 7;
+  optional float hideProb = 8;
+  bool lora = 9;
+  int32 seed = 10;
+}
+
+message EvalModelRequest {
+  string uuid = 1;
+  string modelAlias = 2;
+}
+
+message PredictRequest {
+  string uuid = 1;
+  string inputText = 2;
+}

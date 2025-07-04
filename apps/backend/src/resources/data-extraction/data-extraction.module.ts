@@ -1,4 +1,4 @@
-import { ExtractionGrpcClientModule } from '@grpc/extraction.grpc-client.module';
+import { ExtractionGrpcClientModule } from '@grpc/extraction/extraction.grpc-client.module';
 import { Module } from '@nestjs/common';
 import { ParentDatasetModule } from '@resources/parent-dataset/parent-dataset.module';
 import { ParentRecordModule } from '@resources/parent-record/parent-record.module';

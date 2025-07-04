@@ -1,5 +1,5 @@
-import { ExtractionGrpcClientService } from '@grpc/extraction.grpc-client.service';
-import { ExtractionService } from '@grpc/interfaces/extraction.interface';
+import { ExtractionGrpcClientService } from '@grpc/extraction/extraction.grpc-client.service';
+import { ExtractionService } from '@grpc/extraction/interfaces/extraction.interface';
 import { Injectable } from '@nestjs/common';
 import { ApproachEnum, OriginEnum, ProgressTypeEnum } from '@prisma/client';
 import { ParentDatasetService } from '@resources/parent-dataset/parent-dataset.service';

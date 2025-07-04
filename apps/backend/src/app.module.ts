@@ -1,4 +1,5 @@
 import { ConfigModule } from '@config/config.module';
+import { ExtractionGrpcClientModule } from '@grpc/extraction/extraction.grpc-client.module';
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '@prisma/prisma.module';
 import { RedisModule } from '@redis/redis.module';
@@ -25,6 +26,7 @@ import { AppService } from './app.service';
     ChildRecordModule,
     DataExtractionModule,
     DatasetGenerationModule,
+    ExtractionGrpcClientModule,
     GenerationBatchModule,
     ModelHistoryModule,
     ParentDatasetModule,
