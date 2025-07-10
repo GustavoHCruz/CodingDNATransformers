@@ -116,7 +116,7 @@ def load_checkpoint(path: str) -> tuple[PreTrainedModel, PreTrainedTokenizerBase
 
 	return model, tokenizer
 
-def train(accelerator: Accelerator, model: PreTrainedModel, train_dataloader: DataLoader) -> tuple[PreTrainedModel, dict[str, Any]]:
+def train(accelerator: Accelerator, model: PreTrainedModel, train_dataloader: DataLoader, tokenizer) -> tuple[PreTrainedModel, dict[str, Any]]:
 	epochs = 3
 	lr = 5e-5
 	gradient_accumulation_steps = 8
@@ -139,16 +139,17 @@ def train(accelerator: Accelerator, model: PreTrainedModel, train_dataloader: Da
 		lr_scheduler
 	)
 
-	train_dataloder_len = len(train_dataloader)
+	train_dataloader_len_local = len(train_dataloader)
+
 	history = {"epoch": [], "time": [], "train_loss": [], "lr": []}
 	start_time = time.time()
 	
-	num_update_steps_per_epoch = ceil(len(train_dataloader) / gradient_accumulation_steps)
+	num_update_steps_per_epoch = ceil(train_dataloader_len_local / gradient_accumulation_steps)
 	max_train_steps = epochs * num_update_steps_per_epoch
 
 	train_bar = tqdm(total=max_train_steps, desc=f"Steps", leave=True, disable=not accelerator.is_local_main_process)
-	global_step = 0
 
+	global_step = 0
 	model.train()
 	for epoch in range(epochs):
 		train_loss = 0.0
@@ -161,7 +162,7 @@ def train(accelerator: Accelerator, model: PreTrainedModel, train_dataloader: Da
 			accelerator.backward(loss)
 			accumulated_loss += loss.item()
 
-			if (batch_idx + 1) % gradient_accumulation_steps == 0 or (batch_idx + 1 == train_dataloder_len):
+			if (batch_idx + 1) % gradient_accumulation_steps == 0 or (batch_idx + 1 == train_dataloader_len_local):
 				accelerator.clip_grad_norm_(model.parameters(), max_norm=0.5)
 
 				optimizer.step()
@@ -172,10 +173,12 @@ def train(accelerator: Accelerator, model: PreTrainedModel, train_dataloader: Da
 				train_loss += loss_val
 				global_step += 1
 
-				current_epoch_fraction = epoch + ((batch_idx / train_dataloder_len) * 8)
+				steps_in_epoch = ceil(train_dataloader_len_local / gradient_accumulation_steps)
+				current_epoch_fraction = epoch + (global_step % steps_in_epoch) / steps_in_epoch
+
 				current_lr = lr_scheduler.get_last_lr()[0]
 
-				train_bar.update(gradient_accumulation_steps)
+				train_bar.update(1)
 				train_bar.set_postfix(loss=loss_val, lr=current_lr, epoch=round(current_epoch_fraction, 2))
 
 				history["epoch"].append(round(current_epoch_fraction, 2))
@@ -190,7 +193,7 @@ def train(accelerator: Accelerator, model: PreTrainedModel, train_dataloader: Da
 	return model, history
 
 def main() -> None:
-	train_csv_path = "dna_proteins.csv"
+	train_csv_path = "train.csv"
 	checkpoint = "gpt2"
 	output_path = "./ProtGPT"
 
@@ -206,13 +209,13 @@ def main() -> None:
 
 	model, tokenizer = load_checkpoint(checkpoint)
 
-	train_dataset = DNADatasetFinetune(csv_path=train_csv_path, tokenizer=tokenizer, dataset_total_length=681899)
-	train_dataloader = DataLoader(train_dataset, batch_size=2, collate_fn=FinetuneDataCollator(tokenizer))
+	train_dataset = DNADatasetFinetune(csv_path=train_csv_path, tokenizer=tokenizer, dataset_total_length=600000)
+	train_dataloader = DataLoader(train_dataset, batch_size=1, collate_fn=FinetuneDataCollator(tokenizer))
 
 	if is_main_process:
 		logger.info(f"Starting fine-tune with {num_gpus} GPU(s)")
 
-	model, _ = train(accelerator, model, train_dataloader)
+	model, _ = train(accelerator, model, train_dataloader, tokenizer)
 	
 	model = accelerator.unwrap_model(model)
 

@@ -2,9 +2,10 @@ import csv
 import re
 from typing import Any, Generator
 
+import editdistance
 import torch
-from rouge_score import rouge_scorer
 from torch.utils.data import DataLoader, IterableDataset
+from tqdm import tqdm
 from transformers.modeling_utils import PreTrainedModel
 from transformers.models.auto.modeling_auto import AutoModelForCausalLM
 from transformers.models.auto.tokenization_auto import AutoTokenizer
@@ -17,9 +18,9 @@ def process_sequence(sequence: str) -> str:
   return "".join(f"[DNA_{nucl.upper()}]" for nucl in sequence if nucl.upper() in valid_dna)
 
 def process_target(target: str) -> str:
-  target = target + "*"
-  target = target[:target.find("*") + 1]
-  return "".join(f"[PROT_{prot.upper()}]" for prot in target if prot.upper() in valid_prot)
+	target = target + "*"
+	target = target[:target.find("*") + 1]
+	return "".join(f"[PROT_{prot.upper()}]" for prot in target if prot.upper() in valid_prot)
 
 def promptfy(dna_tokens: str) -> str:
   return f"<|DNA|> {dna_tokens} <|PROTEIN|>"
@@ -69,17 +70,19 @@ class DNADatasetEvaluation(IterableDataset):
         }
 
 def load_finetuned(path: str) -> tuple[PreTrainedModel, PreTrainedTokenizerBase]:
-  model = AutoModelForCausalLM.from_pretrained(path)
+  model = AutoModelForCausalLM.from_pretrained(path, device_map="cuda")
   tokenizer = AutoTokenizer.from_pretrained(path)
 
   return model, tokenizer
 
-eval_csv_path = "eval.csv"
+eval_csv_path = "test.csv"
 checkpoint = "ProtGPT"
 
 model, tokenizer = load_finetuned(checkpoint)
 
-eval_dataset = DNADatasetEvaluation(csv_path=eval_csv_path, tokenizer=tokenizer, dataset_total_length=100)
+model = model.to("cuda")
+
+eval_dataset = DNADatasetEvaluation(csv_path=eval_csv_path, tokenizer=tokenizer, dataset_total_length=5000)
 eval_dataloader = DataLoader(eval_dataset, batch_size=1)
 
 model.eval()
@@ -87,39 +90,34 @@ model.eval()
 preds = []
 refs = []
 
-for batch in eval_dataloader:
-  with torch.no_grad():
-    generated_ids = model.generate(
-      input_ids=batch["input_ids"],
-      attention_mask=batch["attention_mask"],
-      max_new_tokens=128,
-      pad_token_id=tokenizer.pad_token_id,
-      do_sample=True,
-      temperature=0.8,
-      top_p=0.95,
-      typical_p=0.98,
-      num_beams=1
-    )
+similarities = []
+for batch in tqdm(eval_dataloader):
+	with torch.no_grad():
+		generated_ids = model.generate(
+			input_ids=batch["input_ids"].to("cuda"),
+			attention_mask=batch["attention_mask"].to("cuda"),
+			max_new_tokens=128,
+			pad_token_id=tokenizer.pad_token_id,
+			do_sample=True,
+			temperature=0.8,
+			top_p=0.95,
+			typical_p=0.98,
+			num_beams=1
+		)
+
+	generated_texts = tokenizer.decode(generated_ids[0], skip_special_tokens=False)
+
+	start = generated_texts.find("<|PROTEIN|>")
+	protein_tokenized = generated_texts[start + len("<|PROTEIN|>"):].strip()
+	decoded_tgt = tokenizer.decode(batch["labels"][0])
+
+	pred = unprocess_target(protein_tokenized)
+	target = unprocess_target(decoded_tgt)
+
+	pred = pred.replace("*", "")
+
+	dist = editdistance.eval(pred, target)
+	similarity = 1 - dist / max(len(pred), len(target))
+	similarities.append(similarity)
     
-  generated_texts = tokenizer.decode(generated_ids[0], skip_special_tokens=False)
-
-  start = generated_texts.find("<|PROTEIN|>")
-  protein_tokenized = generated_texts[start + len("<|PROTEIN|>"):].strip()
-  preds.append(unprocess_target(protein_tokenized))
-  decoded_tgt = tokenizer.decode(batch["labels"][0])
-  refs.append(unprocess_target(decoded_tgt))
-
-  print("pred", unprocess_target(protein_tokenized))
-  print("ref", unprocess_target(decoded_tgt))
-
-rouge_metrics = {'rouge1': [], 'rouge2': [], 'rougeL': []}
-scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=False)
-
-for ref, pred in zip(refs, preds):
-  scores = scorer.score(ref, pred)
-  for key in rouge_metrics:
-    rouge_metrics[key].append(scores[key].fmeasure)
-
-rouge_avg = {k: sum(v)/len(v) for k, v in rouge_metrics.items()}
-
-print(rouge_avg)
+print(sum(similarities) / len(similarities))
