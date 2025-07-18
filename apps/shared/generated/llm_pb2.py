@@ -25,7 +25,7 @@ _sym_db = _symbol_database.Default()
 from google.protobuf import empty_pb2 as google_dot_protobuf_dot_empty__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\tllm.proto\x12\x03llm\x1a\x1bgoogle/protobuf/empty.proto\"N\n\x12\x43reateModelRequest\x12\x0c\n\x04uuid\x18\x01 \x01(\t\x12\x12\n\nmodelAlias\x18\x02 \x01(\t\x12\x16\n\x0e\x63heckpointName\x18\x03 \x01(\t\"\xe1\x01\n\x11TrainModelRequest\x12\x0c\n\x04uuid\x18\x01 \x01(\t\x12\x12\n\nmodelAlias\x18\x02 \x01(\t\x12\x14\n\x0clearningRate\x18\x03 \x01(\x02\x12\x11\n\tbatchSize\x18\x04 \x01(\x05\x12\x1c\n\x14gradientAccumulation\x18\x05 \x01(\x05\x12\x13\n\x0bwarmupRatio\x18\x06 \x01(\x02\x12\x0e\n\x06\x65pochs\x18\x07 \x01(\x05\x12\x15\n\x08hideProb\x18\x08 \x01(\x02H\x00\x88\x01\x01\x12\x0c\n\x04lora\x18\t \x01(\x08\x12\x0c\n\x04seed\x18\n \x01(\x05\x42\x0b\n\t_hideProb\"4\n\x10\x45valModelRequest\x12\x0c\n\x04uuid\x18\x01 \x01(\t\x12\x12\n\nmodelAlias\x18\x02 \x01(\t\"1\n\x0ePredictRequest\x12\x0c\n\x04uuid\x18\x01 \x01(\t\x12\x11\n\tinputText\x18\x02 \x01(\t2\xfe\x01\n\nLlmService\x12>\n\x0b\x43reateModel\x12\x17.llm.CreateModelRequest\x1a\x16.google.protobuf.Empty\x12<\n\nTrainModel\x12\x16.llm.TrainModelRequest\x1a\x16.google.protobuf.Empty\x12:\n\tEvalModel\x12\x15.llm.EvalModelRequest\x1a\x16.google.protobuf.Empty\x12\x36\n\x07Predict\x12\x13.llm.PredictRequest\x1a\x16.google.protobuf.Emptyb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\tllm.proto\x12\x03llm\x1a\x1bgoogle/protobuf/empty.proto\"g\n\x12\x43reateModelRequest\x12\x10\n\x08\x61pproach\x18\x01 \x01(\t\x12\x12\n\ncheckpoint\x18\x02 \x01(\t\x12\x0c\n\x04name\x18\x03 \x01(\t\x12\x0c\n\x04uuid\x18\x04 \x01(\t\x12\x0f\n\x07isChild\x18\x05 \x01(\x08\"\xfd\x01\n\x11TrainModelRequest\x12\x10\n\x08\x61pproach\x18\x01 \x01(\t\x12\x12\n\ncheckpoint\x18\x02 \x01(\t\x12\x0c\n\x04name\x18\x03 \x01(\t\x12\x0c\n\x04uuid\x18\x04 \x01(\t\x12\x12\n\ndataLength\x18\x05 \x01(\x05\x12\x0e\n\x06\x65pochs\x18\x06 \x01(\x05\x12\x11\n\tbatchSize\x18\x07 \x01(\x05\x12\x1c\n\x14gradientAccumulation\x18\x08 \x01(\x05\x12\n\n\x02lr\x18\t \x01(\x02\x12\x13\n\x0bwarmupRatio\x18\n \x01(\x02\x12\x15\n\x08hideProb\x18\x0b \x01(\x02H\x00\x88\x01\x01\x12\x0c\n\x04seed\x18\x0c \x01(\x05\x42\x0b\n\t_hideProb\"4\n\x10\x45valModelRequest\x12\x0c\n\x04uuid\x18\x01 \x01(\t\x12\x12\n\nmodelAlias\x18\x02 \x01(\t\"1\n\x0ePredictRequest\x12\x0c\n\x04uuid\x18\x01 \x01(\t\x12\x11\n\tinputText\x18\x02 \x01(\t2\xfe\x01\n\nLlmService\x12>\n\x0b\x43reateModel\x12\x17.llm.CreateModelRequest\x1a\x16.google.protobuf.Empty\x12<\n\nTrainModel\x12\x16.llm.TrainModelRequest\x1a\x16.google.protobuf.Empty\x12:\n\tEvalModel\x12\x15.llm.EvalModelRequest\x1a\x16.google.protobuf.Empty\x12\x36\n\x07Predict\x12\x13.llm.PredictRequest\x1a\x16.google.protobuf.Emptyb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,13 +33,13 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'llm_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
   _globals['_CREATEMODELREQUEST']._serialized_start=47
-  _globals['_CREATEMODELREQUEST']._serialized_end=125
-  _globals['_TRAINMODELREQUEST']._serialized_start=128
-  _globals['_TRAINMODELREQUEST']._serialized_end=353
-  _globals['_EVALMODELREQUEST']._serialized_start=355
-  _globals['_EVALMODELREQUEST']._serialized_end=407
-  _globals['_PREDICTREQUEST']._serialized_start=409
-  _globals['_PREDICTREQUEST']._serialized_end=458
-  _globals['_LLMSERVICE']._serialized_start=461
-  _globals['_LLMSERVICE']._serialized_end=715
+  _globals['_CREATEMODELREQUEST']._serialized_end=150
+  _globals['_TRAINMODELREQUEST']._serialized_start=153
+  _globals['_TRAINMODELREQUEST']._serialized_end=406
+  _globals['_EVALMODELREQUEST']._serialized_start=408
+  _globals['_EVALMODELREQUEST']._serialized_end=460
+  _globals['_PREDICTREQUEST']._serialized_start=462
+  _globals['_PREDICTREQUEST']._serialized_end=511
+  _globals['_LLMSERVICE']._serialized_start=514
+  _globals['_LLMSERVICE']._serialized_end=768
 # @@protoc_insertion_point(module_scope)

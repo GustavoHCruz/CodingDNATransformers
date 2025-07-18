@@ -1,8 +1,6 @@
 import os
 from transformers import AutoModel, AutoTokenizer
-from config import STORAGE_DIR
-
-gpt_models = ['gpt2', 'gpt2-medium'];
+from config import STORAGE_DIR;
 
 models = ['gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl', 'bert-base-uncased', 'zhihan1996/DNA_bert_6', 't5-base']
 
