@@ -1,20 +1,22 @@
 import csv
-import logging
+import os
 import time
+from datetime import datetime
 from math import ceil
 from typing import Any, Generator
 
+import pandas as pd
 import torch
 from accelerate import Accelerator
+from config import SHARED_DIR, STORAGE_DIR
+from llms.utils import set_seed
+from redis_service import redis_service
 from torch.nn.utils.rnn import pad_sequence
 from torch.optim import AdamW
 from torch.utils.data import DataLoader, IterableDataset
-from tqdm import tqdm
-from transformers.modeling_utils import PreTrainedModel
 from transformers.models.auto.modeling_auto import AutoModelForCausalLM
 from transformers.models.auto.tokenization_auto import AutoTokenizer
 from transformers.optimization import get_scheduler
-from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 
 valid_dna = set("ACGTURYSWKMBDHVN")
 valid_prot = set("ACDEFGHIKLMNPQRSTVWY*X")
@@ -96,34 +98,78 @@ class FinetuneDataCollator:
 			"labels": labels_padded
 		}
 
-def load_checkpoint(path: str) -> tuple[PreTrainedModel, PreTrainedTokenizerBase]:
-	model = AutoModelForCausalLM.from_pretrained(path)
-	tokenizer = AutoTokenizer.from_pretrained(path)
-	special_tokens = ["[DNA_A]", "[DNA_C]", "[DNA_G]", "[DNA_T]", "[DNA_R]", "[DNA_Y]", "[DNA_S]", "[DNA_W]", "[DNA_K]", "[DNA_M]", "[DNA_B]", "[DNA_D]", "[DNA_H]", "[DNA_V]", "[DNA_N]", "[PROT_A]", "[PROT_C]", "[PROT_D]", "[PROT_E]", "[PROT_F]", "[PROT_G]", "[PROT_H]", "[PROT_I]", "[PROT_K]", "[PROT_L]", "[PROT_M]", "[PROT_N]", "[PROT_P]", "[PROT_Q]", "[PROT_R]", "[PROT_S]", "[PROT_T]", "[PROT_V]", "[PROT_W]", "[PROT_Y]", "[PROT_*]", "[PROT_X]"]
-	tokenizer.add_tokens(special_tokens)
+def create_model(
+	checkpoint: str,
+	name: str,
+	uuid: str,
+	is_child: bool,
+) -> None:
+	redis_service.set_create_status(uuid, "IN_PROGRESS")
 
-	tokenizer.pad_token = "[PROT_*]"
-	tokenizer.eos_token = "[PROT_*]"
+	if is_child:
+		parent_checkpoint = os.path.join(STORAGE_DIR, "models", name)
+		model = AutoModelForCausalLM.from_pretrained(parent_checkpoint, low_cpu_mem_usage=False)
+		tokenizer = AutoTokenizer.from_pretrained(parent_checkpoint)
 
-	tokenizer.add_special_tokens({
+	else:
+		model = AutoModelForCausalLM.from_pretrained(checkpoint)
+		tokenizer = AutoTokenizer.from_pretrained(checkpoint)
+		
+		special_tokens = ["[DNA_A]", "[DNA_C]", "[DNA_G]", "[DNA_T]", "[DNA_R]", "[DNA_Y]", "[DNA_S]", "[DNA_W]", "[DNA_K]", "[DNA_M]", "[DNA_B]", "[DNA_D]", "[DNA_H]", "[DNA_V]", "[DNA_N]", "[PROT_A]", "[PROT_C]", "[PROT_D]", "[PROT_E]", "[PROT_F]", "[PROT_G]", "[PROT_H]", "[PROT_I]", "[PROT_K]", "[PROT_L]", "[PROT_M]", "[PROT_N]", "[PROT_P]", "[PROT_Q]", "[PROT_R]", "[PROT_S]", "[PROT_T]", "[PROT_V]", "[PROT_W]", "[PROT_Y]", "[PROT_*]", "[PROT_X]"]
+		tokenizer.add_tokens(special_tokens)
+
+		tokenizer.pad_token = "[PROT_*]"
+		tokenizer.eos_token = "[PROT_*]"
+
+		tokenizer.add_special_tokens({
 			"eos_token": "[PROT_*]",
 			"additional_special_tokens": ["<|DNA|>", "<|PROTEIN|>"]
-	})
+		})
 
-	tokenizer.add_eos_token = True
+		tokenizer.add_eos_token = True
 
-	model.resize_token_embeddings(len(tokenizer), mean_resizing=False)
+		model.resize_token_embeddings(len(tokenizer), mean_resizing=False)
 
-	return model, tokenizer
+	output_path = os.path.join(STORAGE_DIR, "models", name)
+	model.save_pretrained(output_path)
+	tokenizer.save_pretrained(output_path)
 
-def train(accelerator: Accelerator, model: PreTrainedModel, train_dataloader: DataLoader, tokenizer) -> tuple[PreTrainedModel, dict[str, Any]]:
-	epochs = 3
-	lr = 5e-5
-	gradient_accumulation_steps = 8
+	redis_service.set_create_status(uuid, "DONE")
+
+def train_model(
+	name: str,
+	uuid: str,
+	data_length: int,
+	epochs: int,
+	batch_size: int,
+	gradient_accumulation: int,
+	lr: float,
+	warmup_ratio: float,
+	seed: int
+) -> None:
+	redis_service.set_train_status(uuid, "IN_PROGRESS")
+
+	set_seed(seed)
+
+	accelerator = Accelerator()
+	is_main_process = accelerator.is_main_process
+	num_gpus = accelerator.num_processes
+
+	if is_main_process:
+		redis_service.set_train_gpu_amount = num_gpus
+
+	checkpoint_path = os.path.join(STORAGE_DIR, "models", name)
+	model = AutoModelForCausalLM.from_pretrained(checkpoint_path)
+	tokenizer = AutoTokenizer.from_pretrained(checkpoint_path)
+
+	data_path = os.path.join(SHARED_DIR, "temp", uuid)
+
+	dataset = DNADatasetFinetune(csv_path=data_path+".csv", tokenizer=tokenizer, dataset_total_length=data_length)
+	dataloader = DataLoader(dataset, batch_size=batch_size, collate_fn=FinetuneDataCollator(tokenizer))
+
 	optimizer = AdamW(model.parameters(), lr=lr)
-
-	num_training_steps = epochs * len(train_dataloader)
-	num_warmup_steps = int(0.03 * num_training_steps)
+	num_training_steps = epochs * len(dataloader)
+	num_warmup_steps = int(warmup_ratio * num_training_steps)
 
 	lr_scheduler = get_scheduler(
 		name="cosine",
@@ -132,22 +178,22 @@ def train(accelerator: Accelerator, model: PreTrainedModel, train_dataloader: Da
 		num_training_steps=num_training_steps
 	)
 
-	model, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
-		model,
-		optimizer,
-		train_dataloader,
-		lr_scheduler
+	model, optimizer, dataloader, lr_scheduler = accelerator.prepare(
+		model, optimizer, dataloader, lr_scheduler
 	)
 
-	train_dataloader_len_local = len(train_dataloader)
+	dataloader_len_local = len(dataloader)
 
 	history = {"epoch": [], "time": [], "train_loss": [], "lr": []}
 	start_time = time.time()
-	
-	num_update_steps_per_epoch = ceil(train_dataloader_len_local / gradient_accumulation_steps)
-	max_train_steps = epochs * num_update_steps_per_epoch
 
-	train_bar = tqdm(total=max_train_steps, desc=f"Steps", leave=True, disable=not accelerator.is_local_main_process)
+	num_update_steps_per_epoch = ceil(dataloader_len_local / gradient_accumulation)
+	max_train_steps = epochs * num_update_steps_per_epoch
+	
+	redis_service.set_train_total_steps(uuid, max_train_steps)
+
+	print("cheguei aqui")
+	print("max_train_steps:", max_train_steps)
 
 	global_step = 0
 	model.train()
@@ -155,14 +201,14 @@ def train(accelerator: Accelerator, model: PreTrainedModel, train_dataloader: Da
 		train_loss = 0.0
 
 		accumulated_loss = 0.0
-		for batch_idx, batch in enumerate(train_dataloader):
+		for batch_idx, batch in enumerate(dataloader):
 			outputs = model(**batch)
-			loss = outputs.loss / gradient_accumulation_steps
+			loss = outputs.loss / gradient_accumulation
 
 			accelerator.backward(loss)
 			accumulated_loss += loss.item()
 
-			if (batch_idx + 1) % gradient_accumulation_steps == 0 or (batch_idx + 1 == train_dataloader_len_local):
+			if (batch_idx + 1) % gradient_accumulation == 0 or (batch_idx + 1 == dataloader_len_local):
 				accelerator.clip_grad_norm_(model.parameters(), max_norm=0.5)
 
 				optimizer.step()
@@ -173,13 +219,14 @@ def train(accelerator: Accelerator, model: PreTrainedModel, train_dataloader: Da
 				train_loss += loss_val
 				global_step += 1
 
-				steps_in_epoch = ceil(train_dataloader_len_local / gradient_accumulation_steps)
+				steps_in_epoch = ceil(dataloader_len_local / gradient_accumulation)
 				current_epoch_fraction = epoch + (global_step % steps_in_epoch) / steps_in_epoch
 
 				current_lr = lr_scheduler.get_last_lr()[0]
 
-				train_bar.update(1)
-				train_bar.set_postfix(loss=loss_val, lr=current_lr, epoch=round(current_epoch_fraction, 2))
+				redis_service.set_train_loss(uuid, loss_val)
+				redis_service.set_train_lr(uuid, current_lr)
+				redis_service.set_train_step(uuid, global_step)
 
 				history["epoch"].append(round(current_epoch_fraction, 2))
 				history["train_loss"].append(accumulated_loss)
@@ -187,48 +234,19 @@ def train(accelerator: Accelerator, model: PreTrainedModel, train_dataloader: Da
 				history["time"].append(time.time() - start_time)
 
 				accumulated_loss = 0.0
-
-	train_bar.close()
-
-	return model, history
-
-def main() -> None:
-	train_csv_path = "train.csv"
-	checkpoint = "gpt2"
-	output_path = "./ProtGPT"
-
-	accelerator = Accelerator()
-	is_main_process = accelerator.is_main_process
-	num_gpus = accelerator.num_processes
-	logger = logging.getLogger(__name__)
-
-	logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-
-	if is_main_process:
-		logger.info(f"Selected Model: {checkpoint}")
-
-	model, tokenizer = load_checkpoint(checkpoint)
-
-	train_dataset = DNADatasetFinetune(csv_path=train_csv_path, tokenizer=tokenizer, dataset_total_length=600000)
-	train_dataloader = DataLoader(train_dataset, batch_size=1, collate_fn=FinetuneDataCollator(tokenizer))
-
-	if is_main_process:
-		logger.info(f"Starting fine-tune with {num_gpus} GPU(s)")
-
-	model, _ = train(accelerator, model, train_dataloader, tokenizer)
 	
 	model = accelerator.unwrap_model(model)
 
 	if is_main_process:
-		logger.info(f"Saving finetuned model at {output_path}")
+		output_path = os.path.join(STORAGE_DIR, "models", name)
 		model.save_pretrained(output_path)
 		tokenizer.save_pretrained(output_path)
-	
-	if is_main_process:
-		logger.info(f"Finishing execution")
 
+		df = pd.DataFrame(history)
+		now = datetime.now().strftime("%Y%m%d-%H%M%S")
+		df.to_csv(f"{output_path}/history-{now}.csv", index=False)
+	
 	accelerator.wait_for_everyone()
 	accelerator.end_training()
 
-if __name__ == "__main__":
-		main()
+	redis_service.set_train_status(uuid, "DONE")

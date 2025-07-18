@@ -7,19 +7,6 @@ from torch.optim import AdamW
 from torch.utils.data import DataLoader, Dataset, random_split
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from classes.SplicingTransformers import SplicingTransformers
-
-try:
-	from IPython import get_ipython
-	in_notebook = get_ipython() is not None and 'IPKernelApp' in get_ipython().config
-except ImportError:
-	in_notebook = False
-
-if in_notebook:
-	from tqdm.notebook import tqdm
-else:
-	from tqdm import tqdm
-
 class ExInSeqsGPT(SplicingTransformers):
 	class __SpliceGPTDataset__(Dataset):
 		def __init__(self, data, tokenizer, sequence_len, flanks_size, feat_hide_prob):

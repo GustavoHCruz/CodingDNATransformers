@@ -12,22 +12,26 @@ service LlmService {
 }
 
 message CreateModelRequest {
-  string uuid = 1;
-  string modelAlias = 2;
-  string checkpointName = 3;
+  string approach = 1;
+  string checkpoint = 2;
+  string name = 3;
+  string uuid = 4;
+  bool isChild = 5;
 }
 
 message TrainModelRequest {
-  string uuid = 1;
-  string modelAlias = 2;
-  float learningRate = 3;
-  int32 batchSize = 4;
-  int32 gradientAccumulation = 5;
-  float warmupRatio = 6;
-  int32 epochs = 7;
-  optional float hideProb = 8;
-  bool lora = 9;
-  int32 seed = 10;
+  string approach = 1;
+  string checkpoint = 2;
+  string name = 3;
+  string uuid = 4;
+  int32 dataLength = 5;
+  int32 epochs = 6;
+  int32 batchSize = 7;
+  int32 gradientAccumulation = 8;
+  float lr = 9;
+  float warmupRatio = 10;
+  optional float hideProb = 11;
+  int32 seed = 12;
 }
 
 message EvalModelRequest {
