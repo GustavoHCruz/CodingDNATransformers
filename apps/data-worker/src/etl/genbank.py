@@ -13,52 +13,62 @@ def exin_classifier_gb(annotations_file_path: str, seq_max_len=512, flank_max_le
 
 			organism = record.annotations.get("organism", "")
 
+			cds_regions = []
 			for feature in record.features:
-				if feature.type in ["intron", "exon"]:
-					location = feature.location
-					gene = feature.qualifiers.get("gene", "")
-
-					strand = None
-					if hasattr(location, "strand"):
-						strand = location.strand
-					if strand is None:
-						continue
-
-					feature_sequence = sequence[location.start:location.end]
-					feature_sequence = str(feature_sequence) if strand == 1 else str(feature_sequence.reverse_complement())
-
-					if len(feature_sequence) > seq_max_len or len(feature_sequence) == 0:
-						continue
+				if feature.type == "CDS" and feature.qualifiers.get("partial", ["false"])[0] == "false":
+					cds_regions.append(feature.location)
 					
-					before = ""
-					start = location.start - flank_max_len
-					if start < 0:
-						start = 0
-					if location.start > 0:
-						before = sequence[start:location.start]
-						before = str(before) if strand == 1 else str(before.reverse_complement())
+			for feature in record.features:
+				if feature.type not in ["intron", "exon"]:
+					continue
 
-					after = ""
-					end = location.end + flank_max_len
-					if end > len(sequence):
-						end = len(sequence)
-					if location.end < len(sequence):
-						after = sequence[location.end:end]
-						after = str(after) if strand == 1 else str(after.reverse_complement())
+				if "pseudo" in feature.qualifiers or feature.qualifiers.get("partial", ["false"][0] == "true"):
+					continue
 
-					label = str(feature.type)
+				location = feature.location
 
-					organism = str(organism)
-					gene = str(gene[0] if type(gene) == list else gene)
+				strand = location.strand
+				if strand is None:
+					strand = feature.qualifiers.get("strand", [None])[0]
+				if strand is None:
+					continue
 
-					yield dict(
-						sequence=feature_sequence,
-						target=label,
-						flank_before=before,
-						flank_after=after,
-						organism=organism,
-						gene=gene
-					)
+				is_inside_cds = any(location.start >= cds.start and location.end <= cds.end for cds in cds_regions)
+				if not is_inside_cds:
+					continue
+
+				feature_sequence = sequence[location.start:location.end]
+				if strand == -1:
+					feature_sequence = feature_sequence.reverse_complement()
+				feature_sequence = str(feature_sequence)
+
+				if len(feature_sequence) > seq_max_len or len(feature_sequence) == 0:
+					continue
+					
+				before = sequence[max(0, location.start - flank_max_len):location.start]
+				after = sequence[location.end:min(len(sequence), location.end + flank_max_len)]
+
+				if strand == -1:
+					before = before.reverse_complement()
+					after = after.reverse_complement()
+				
+				before = str(before)
+				after = str(after)
+
+				gene = feature.qualifiers.get("gene", "")
+				gene = gene[0] if isinstance(gene, list) else gene
+
+				target = str(feature.type)
+				organism = str(organism)
+
+				yield dict(
+					sequence=feature_sequence,
+					target=target,
+					flank_before=before,
+					flank_after=after,
+					organism=organism,
+					gene=gene
+				)
 
 def exin_translator_gb(annotations_file_path: str, seq_max_len=512):
 	with open(annotations_file_path, "r") as gb_file:
