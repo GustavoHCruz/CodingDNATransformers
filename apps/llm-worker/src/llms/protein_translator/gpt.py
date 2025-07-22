@@ -30,10 +30,8 @@ def process_target(target: str) -> str:
 	target = target[:target.find("*") + 1]
 	return "".join(f"[PROT_{prot.upper()}]" for prot in target if prot.upper() in valid_prot)
 
-def promptfy(dna_tokens: str, protein_tokens=None) -> str:
-	if protein_tokens:
-		return f"<|DNA|> {dna_tokens} <|PROTEIN|> {protein_tokens}"
-	return f"<|DNA|> {dna_tokens} <|PROTEIN|>"
+def promptfy(sequence: str, target: str) -> tuple[str, str]:
+	return f"<|DNA|> {sequence} <|PROTEIN|>", f"<|DNA|> {sequence} <|PROTEIN|> {target}"
 
 class DNADatasetFinetune(IterableDataset):
 	def __init__(self, csv_path: str, tokenizer, dataset_total_length: int, sequence_max_length=1024) -> None:
@@ -49,11 +47,10 @@ class DNADatasetFinetune(IterableDataset):
 		with open(self.csv_path, newline='') as csvfile:
 			reader = csv.DictReader(csvfile)
 			for row in reader:
-				seq = process_sequence(row["sequence"])
-				tgt = process_target(row["target"])
+				sequence = process_sequence(row["sequence"])
+				target = process_target(row["target"])
 
-				partial = promptfy(seq)
-				full = promptfy(seq, tgt)
+				partial, full = promptfy(sequence, target)
 
 				partial_encoded = self.tokenizer(partial)
 				full_encoded = self.tokenizer(
@@ -115,7 +112,7 @@ def create_model(
 	else:
 		model = AutoModelForCausalLM.from_pretrained(checkpoint)
 		tokenizer = AutoTokenizer.from_pretrained(checkpoint)
-		
+
 		special_tokens = ["[DNA_A]", "[DNA_C]", "[DNA_G]", "[DNA_T]", "[DNA_R]", "[DNA_Y]", "[DNA_S]", "[DNA_W]", "[DNA_K]", "[DNA_M]", "[DNA_B]", "[DNA_D]", "[DNA_H]", "[DNA_V]", "[DNA_N]", "[PROT_A]", "[PROT_C]", "[PROT_D]", "[PROT_E]", "[PROT_F]", "[PROT_G]", "[PROT_H]", "[PROT_I]", "[PROT_K]", "[PROT_L]", "[PROT_M]", "[PROT_N]", "[PROT_P]", "[PROT_Q]", "[PROT_R]", "[PROT_S]", "[PROT_T]", "[PROT_V]", "[PROT_W]", "[PROT_Y]", "[PROT_*]", "[PROT_X]"]
 		tokenizer.add_tokens(special_tokens)
 
