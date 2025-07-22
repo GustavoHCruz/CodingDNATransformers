@@ -3,7 +3,7 @@ import { ChildRecordService } from '@resources/child-record/child-record.service
 import { SHARED_DIR } from 'common/constrants';
 import { format } from 'fast-csv';
 import { createWriteStream } from 'fs';
-import path from 'path';
+import * as path from 'path';
 import { CreateModelDto } from './dto/createModel.dto';
 
 const GPTS_MODELS = ['gpt2', 'gpt2-medium'];
