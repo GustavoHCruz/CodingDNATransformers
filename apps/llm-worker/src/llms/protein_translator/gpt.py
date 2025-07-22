@@ -10,7 +10,8 @@ import torch
 from accelerate import Accelerator
 from config import SHARED_DIR, STORAGE_DIR
 from llms.utils import set_seed
-from redis_service import redis_service
+from redis_service import (CreateField, ProcessingStatus, TrainField,
+                           redis_service)
 from torch.nn.utils.rnn import pad_sequence
 from torch.optim import AdamW
 from torch.utils.data import DataLoader, IterableDataset
@@ -102,9 +103,9 @@ def create_model(
 	checkpoint: str,
 	name: str,
 	uuid: str,
-	is_child: bool,
+	is_child: bool = False,
 ) -> None:
-	redis_service.set_create_status(uuid, "IN_PROGRESS")
+	redis_service.set_create_info(uuid, CreateField.STATUS, ProcessingStatus.IN_PROGRESS)
 
 	if is_child:
 		parent_checkpoint = os.path.join(STORAGE_DIR, "models", name)
@@ -134,7 +135,7 @@ def create_model(
 	model.save_pretrained(output_path)
 	tokenizer.save_pretrained(output_path)
 
-	redis_service.set_create_status(uuid, "DONE")
+	redis_service.set_create_info(uuid, CreateField.STATUS, ProcessingStatus.DONE)
 
 def train_model(
 	name: str,
@@ -147,7 +148,7 @@ def train_model(
 	warmup_ratio: float,
 	seed: int
 ) -> None:
-	redis_service.set_train_status(uuid, "IN_PROGRESS")
+	redis_service.set_train_info(uuid, TrainField.STATUS, ProcessingStatus.IN_PROGRESS)
 
 	set_seed(seed)
 
@@ -156,11 +157,16 @@ def train_model(
 	num_gpus = accelerator.num_processes
 
 	if is_main_process:
-		redis_service.set_train_gpu_amount = num_gpus
+		redis_service.set_train_info(
+			uuid=uuid,
+			field=TrainField.GPU_AMOUNT,
+			value=num_gpus
+		)
 
-	checkpoint_path = os.path.join(STORAGE_DIR, "models", name)
-	model = AutoModelForCausalLM.from_pretrained(checkpoint_path)
-	tokenizer = AutoTokenizer.from_pretrained(checkpoint_path)
+	checkpoint_path_in = os.path.join(STORAGE_DIR, "models", f"{name}-temp")
+	checkpoint_path_out = os.path.join(STORAGE_DIR, "models", name)
+	model = AutoModelForCausalLM.from_pretrained(checkpoint_path_in)
+	tokenizer = AutoTokenizer.from_pretrained(checkpoint_path_in)
 
 	data_path = os.path.join(SHARED_DIR, "temp", uuid)
 
@@ -190,10 +196,11 @@ def train_model(
 	num_update_steps_per_epoch = ceil(dataloader_len_local / gradient_accumulation)
 	max_train_steps = epochs * num_update_steps_per_epoch
 	
-	redis_service.set_train_total_steps(uuid, max_train_steps)
-
-	print("cheguei aqui")
-	print("max_train_steps:", max_train_steps)
+	redis_service.set_train_info(
+		uuid=uuid,
+		field=TrainField.TOTAL_STEPS,
+		value=max_train_steps
+	)
 
 	global_step = 0
 	model.train()
@@ -224,9 +231,21 @@ def train_model(
 
 				current_lr = lr_scheduler.get_last_lr()[0]
 
-				redis_service.set_train_loss(uuid, loss_val)
-				redis_service.set_train_lr(uuid, current_lr)
-				redis_service.set_train_step(uuid, global_step)
+				redis_service.set_train_info(
+					uuid=uuid,
+					field=TrainField.LOSS,
+					value=loss_val
+				)
+				redis_service.set_train_info(
+					uuid=uuid,
+					field=TrainField.LR,
+					value=current_lr
+				)
+				redis_service.set_train_info(
+					uuid=uuid,
+					field=TrainField.STEP,
+					value=global_step
+				)
 
 				history["epoch"].append(round(current_epoch_fraction, 2))
 				history["train_loss"].append(accumulated_loss)
@@ -238,15 +257,18 @@ def train_model(
 	model = accelerator.unwrap_model(model)
 
 	if is_main_process:
-		output_path = os.path.join(STORAGE_DIR, "models", name)
-		model.save_pretrained(output_path)
-		tokenizer.save_pretrained(output_path)
+		model.save_pretrained(checkpoint_path_out)
+		tokenizer.save_pretrained(checkpoint_path_out)
 
 		df = pd.DataFrame(history)
 		now = datetime.now().strftime("%Y%m%d-%H%M%S")
-		df.to_csv(f"{output_path}/history-{now}.csv", index=False)
+		df.to_csv(f"{checkpoint_path_out}/history-{now}.csv", index=False)
 	
 	accelerator.wait_for_everyone()
 	accelerator.end_training()
 
-	redis_service.set_train_status(uuid, "DONE")
+	redis_service.set_train_info(
+		uuid=uuid,
+		field=TrainField.STATUS,
+		value=ProcessingStatus.DONE
+	)

@@ -1,4 +1,4 @@
-import { IsInt, IsNumber } from 'class-validator';
+import { IsBoolean, IsInt, IsNumber, IsOptional } from 'class-validator';
 
 export class CreateTrainHistoryDto {
   @IsInt()
@@ -18,6 +18,10 @@ export class CreateTrainHistoryDto {
 
   @IsNumber()
   hideProb: number;
+
+  @IsOptional()
+  @IsBoolean()
+  lora?: boolean;
 
   @IsNumber()
   loss: number;
