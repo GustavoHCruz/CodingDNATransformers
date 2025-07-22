@@ -1,220 +1,296 @@
+import csv
+import os
 import random
 import time
+from math import ceil
+from typing import Any, Generator
 
 import torch
-from plyer import notification
+from accelerate import Accelerator
+from config import SHARED_DIR, STORAGE_DIR
+from torch.nn.utils.rnn import pad_sequence
 from torch.optim import AdamW
-from torch.utils.data import DataLoader, Dataset, random_split
+from torch.utils.data import DataLoader, IterableDataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers.optimization import get_scheduler
+from utils import load_model, save_model, set_seed
 
-class ExInSeqsGPT(SplicingTransformers):
-	class __SpliceGPTDataset__(Dataset):
-		def __init__(self, data, tokenizer, sequence_len, flanks_size, feat_hide_prob):
-			self.data = data
+
+def process_sequence(sequence) -> str:
+	return f"".join(f"[{nucl.upper()}]" for nucl in sequence)
+
+def process_target(label) -> str:
+	return f"[{label.upper()}]"
+
+def promptfy(
+	sequence: str,
+	organism: str,
+	hide_prob: float,
+	target: str,
+	gene: str | None,
+	flank_before: str | None,
+	flank_after: str | None,
+) -> tuple[str, str]:
+	output = f"<|SEQUENCE|>{sequence}\n"
+
+	if organism:
+		if random.random() > hide_prob:
+			output += f"<|ORGANISM|>{organism[:10]}\n"
+
+	if gene:
+		if random.random() > hide_prob:
+			output += f"<|GENE|>{gene[:10]}\n"
+	
+	if flank_before:
+		if random.random() > hide_prob:
+			output += f"<|FLANK_BEFORE|>{flank_before}\n"
+	
+	if flank_after:
+		if random.random() > hide_prob:
+			output += f"<|FLANK_AFTER|>{flank_after}\n"
+	
+	output += "<|TARGET|>"
+
+	return output, f"{output}{target}"
+
+class DNADatasetFinetune(IterableDataset):
+		def __init__(
+			self,
+			csv_path: str,
+			tokenizer,
+			dataset_total_length: int,
+			feat_hide_prob: float,
+			flanks_size: int = 25,
+			sequence_max_length: int = 1024,
+		) -> None:
+			self.csv_path = csv_path
 			self.tokenizer = tokenizer
-			self.max_length = sequence_len + flanks_size * 2 + 80
+			self.max_length = sequence_max_length + flanks_size * 2 + 20
+			self._length = dataset_total_length
 			self.feat_hide_prob = feat_hide_prob
 
 		def __len__(self):
-			return len(self.data["sequence"])
+			return self._length
 		
-		def __getitem__(self, idx):
-			input_text = f"Sequence:{self.data["sequence"][idx]}\n"
+		def __iter__(self) -> Generator[dict[str, torch.Tensor], Any, None]:
+			with open(self.csv_path, newline='') as csvfile:
+				reader = csv.DictReader(csvfile)
+				for row in reader:
+					sequence = process_sequence(row["sequence"])
+					target = process_target(row["target"])
+					organism = row["organism"]
+					gene = row["gene"]
+					flank_before = row["flankBefore"]
+					flank_after = row["flankAfter"]
 
-			if len(self.data["organism"]) > idx and self.data["organism"][idx]:
-				if random.random() > self.feat_hide_prob:
-					input_text += f"Organism:{self.data["organism"][idx][:10]}\n"
-			
-			if len(self.data["gene"]) > idx and self.data["gene"][idx]:
-				if random.random() > self.feat_hide_prob:
-					input_text += f"Gene:{self.data["gene"][idx][:10]}\n"
+					partial, full = promptfy(
+						sequence=sequence,
+						target=target,
+						organism=organism,
+						gene=gene,
+						flank_before=flank_before,
+						flank_after=flank_after,
+						hide_prob=self.feat_hide_prob,
+					)
 
-			if len(self.data["flank_before"]) > idx and self.data["flank_before"][idx]:
-				if random.random() > self.feat_hide_prob:
-					input_text += f"Flank Before:{self.data["flank_before"][idx]}\n"
+					partial_encoded = self.tokenizer(partial)
+					full_encoded = self.tokenizer(
+						full,
+						truncation=True,
+						padding="max_length",
+						max_length=self.max_length
+					)
 
-			if len(self.data["flank_after"]) > idx and self.data["flank_after"][idx]:
-				if random.random() > self.feat_hide_prob:
-					input_text += f"Flank After:{self.data["flank_after"][idx]}\n"
-			
-			input_text += "Answer:"
-			output_text = f"{self.data["label"][idx]}"
+					input_ids = full_encoded["input_ids"]
+					attention_mask = full_encoded["attention_mask"]
 
-			input_ids = self.tokenizer.encode(input_text, truncation=True, max_length=self.max_length, add_special_tokens=True, padding=True)
-			label_ids = self.tokenizer.encode(output_text, truncation=True, max_length=self.max_length, add_special_tokens=False)
+					labels = [-100] * len(input_ids)
+					start = min(len(partial_encoded["input_ids"]), len(input_ids))
 
-			labels = [-100] * len(input_ids)
-			labels[-len(label_ids):] = label_ids
+					for i in range(start, len(input_ids)):
+						if input_ids[i] != self.tokenizer.pad_token_id:
+							labels[i] = input_ids[i]
 
-			return torch.tensor(input_ids), torch.tensor(labels)
+					yield {
+						"input_ids": torch.tensor(input_ids),
+						"attention_mask": torch.tensor(attention_mask),
+						"labels": torch.tensor(labels)
+					}
 
-	def __init__(self, checkpoint="gpt2", device="cuda", seed=None, notification=False, logs_dir="logs", models_dir="models", alias=None, log_level="info"):
-		if seed:
-			self._set_seed(seed)
-		
-		self.log_level = log_level
-			
-		supported = ["gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl", "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B", "EleutherAI/gpt-neo-125M", "EleutherAI/gpt-neo-1.3B", "bigscience/bloom-560m"]
-
-		if checkpoint not in supported:
-			self.load_checkpoint(checkpoint)
-		else:
-			self.model = AutoModelForCausalLM.from_pretrained(checkpoint)
-			self.tokenizer = AutoTokenizer.from_pretrained(checkpoint, padding_side="left")
-			
-			self.tokenizer.pad_token = self.tokenizer.eos_token
-
-			special_tokens = ["[A]", "[C]", "[G]", "[T]", "[R]", "[Y]", "[S]", "[W]", "[K]", "[M]", "[B]", "[D]", "[H]", "[V]", "[N]", "[EXON]", "[INTRON]"]
-			self.tokenizer.add_tokens(special_tokens)
-			self.model.resize_token_embeddings(len(self.tokenizer), mean_resizing=False)
-
-		self.intron_token = self.tokenizer.encode("[INTRON]", add_special_tokens=False)
-		self.exon_token = self.tokenizer.encode("[EXON]", add_special_tokens=False)
-
-		super().__init__(checkpoint=checkpoint, device=device, seed=seed, notification=notification, logs_dir=logs_dir, models_dir=models_dir, alias=alias)
-
-	def load_checkpoint(self, path):
-		self.model = AutoModelForCausalLM.from_pretrained(path)
-		self.tokenizer = AutoTokenizer.from_pretrained(path, padding_side="left")
-
-	def _collate_fn(self, batch):
-		input_ids, labels = zip(*batch)
-		input_ids_padded = torch.nn.utils.rnn.pad_sequence(input_ids, batch_first=True, padding_value=self.tokenizer.pad_token_id)
-		labels_padded = torch.nn.utils.rnn.pad_sequence(labels, batch_first=True, padding_value=-100)
-		attention_mask = (input_ids_padded != self.tokenizer.pad_token_id).long()
-		return input_ids_padded, attention_mask, labels_padded
+class FinetuneDataCollator:
+	def __init__(self, tokenizer) -> None:
+		self.tokenizer = tokenizer
+		self.pad_token_id = tokenizer.pad_token_id
 	
-	def _process_sequence(self, sequence):
-		return f"".join(f"[{nucl.upper()}]" for nucl in sequence)
-	
-	def _process_target(self, label):
-		return f"[{label.upper()}]"
-	
-	def _process_data(self, data):
-		data["sequence"] = [self._process_sequence(sequence) for sequence in data["sequence"]]
-		data["label"] = [self._process_target(label) for label in data["label"]]
-		data["flank_before"] = [self._process_sequence(sequence) for sequence in data["flank_before"]]
-		data["flank_after"] = [self._process_sequence(sequence) for sequence in data["flank_after"]]
+	def __call__(self, batch) -> dict[str, torch.Tensor]:
+		input_ids = [example["input_ids"] for example in batch]
+		attention_mask = [example["attention_mask"] for example in batch]
+		labels = [example["labels"] for example in batch]
 
-		return data
+		input_ids_padded = pad_sequence(input_ids, batch_first=True, padding_value=self.tokenizer.pad_token_id)
+		attention_mask_padded = pad_sequence(attention_mask, batch_first=True, padding_value=0)
+		labels_padded = pad_sequence(labels, batch_first=True, padding_value=-100)
 
-	def add_train_data(self, data, batch_size=32, sequence_len=512, data_config=None):
-		flanks_size = 10
-		feat_hide_prob = 0.01
-		if "flanks_size" in data_config:
-			flanks_size = data_config["flanks_size"]
-		if "feat_hide_prob" in data_config:
-			feat_hide_prob = data_config["feat_hide_prob"]
-
-		if sequence_len > 512:
-			raise ValueError("cannot support sequences_len higher than 512")
-		if flanks_size > 50:
-			raise ValueError("cannot support flanks_size higher than 50")
-
-		self._data_config = {
-			"sequence_len": sequence_len,
-			"flanks_size": flanks_size,
-			"batch_size": batch_size,
-			"feat_hide_prob": feat_hide_prob
+		return {
+			"input_ids": input_ids_padded,
+			"attention_mask": attention_mask_padded,
+			"labels": labels_padded
 		}
-		
-		data = self._process_data(data)
 
-		dataset = self.__SpliceGPTDataset__(data, self.tokenizer, sequence_len=sequence_len, flanks_size=flanks_size, feat_hide_prob=feat_hide_prob)
+def create_model(
+	checkpoint: str,
+	name: str,
+	uuid: str,
+	is_child: bool
+) -> None:
+	if is_child:
+		parent_checkpoint = os.path.join(STORAGE_DIR, "models", name)
+		model = AutoModelForCausalLM.from_pretrained(
+			parent_checkpoint,
+			low_cpu_mem_usage=False
+		)
+		tokenizer = AutoTokenizer.from_pretrained(parent_checkpoint)
+	else:
+		model = AutoModelForCausalLM.from_pretrained(checkpoint)
+		tokenizer = AutoTokenizer.from_pretrained(checkpoint)
 
-		self.train_dataset = dataset
-		self.train_dataloader = DataLoader(self.train_dataset, batch_size=batch_size, shuffle=True, collate_fn=self._collate_fn)
+		special_tokens = ["[A]", "[C]", "[G]", "[T]", "[R]", "[Y]", "[S]", "[W]", "[K]", "[M]", "[B]", "[D]", "[H]", "[V]", "[N]", "[EXON]", "[INTRON]"]
+		tokenizer.add_tokens(special_tokens)
 
-	def _check_test_compatibility(self, sequence_len, flanks_size, batch_size, feat_hide_prob):
-		if hasattr(self, "_train_config"):
-			if self._train_config["sequence_len"] != sequence_len or \
-			self._train_config["flanks_size"] != flanks_size or \
-			self._train_config["batch_size"] != batch_size or \
-			self._train_config["feat_hide_prob"] != feat_hide_prob:
-				print("Detected a different test dataloader configuration of the one used during training. This may lead to suboptimal results.")
+		tokenizer.add_special_tokens({
+			"additional_special_tokens": ["<|SEQUENCE|>", "<|ORGANISM|>", "<|GENE|>", "<|FLANK_BEFORE|>", "<|FLANK_AFTER|>", "<|TARGET|>"]
+		})
 
-	def add_test_data(self, data, batch_size=32, sequence_len=512, data_config=None):
-		flanks_size = 10
-		feat_hide_prob = 0.01
-		if "flanks_size" in data_config:
-			flanks_size = data_config["flanks_size"]
-		if "feat_hide_prob" in data_config:
-			feat_hide_prob = data_config["feat_hide_prob"]
+		tokenizer.add_eos_token = True
 
-		self._check_test_compatibility(sequence_len, flanks_size, batch_size, feat_hide_prob)
-		data = self._process_data(data)
-
-		self.test_dataset = self.__SpliceGPTDataset__(data, self.tokenizer, sequence_len=sequence_len, flanks_size=flanks_size, feat_hide_prob=feat_hide_prob)
-		self.test_dataloader = DataLoader(self.test_dataset, batch_size=batch_size, shuffle=True, collate_fn=self._collate_fn)
-
-	def train(self, lr=5e-4, epochs=3, save_at_end=True, save_freq=5):
-		if not hasattr(self, "train_dataloader"):
-			raise ValueError("Cannot find the train dataloader, make sure you initialized it.")
-		
-		self.start_time = time.time()
-		self._get_next_model_dir()
-
-		self.model.to(self._device)
-		self.optimizer = AdamW(self.model.parameters(), lr=lr)
-
-		self._train_config = dict(**{
-			"lr": lr,
-			"epochs": epochs
-		}, **self._data_config)
-		if hasattr(self, "seed"):
-			self._train_config.update({
-				"seed": self.seed
-			})
-
-		history = {"epoch": [], "time": [], "train_loss": []}
-
-		for epoch in range(epochs):
-			self.model.train()
-			train_loss = 0
-			
-			if self.log_level == "info":
-				train_bar = tqdm(self.train_dataloader, desc=f"Training Epoch {epoch+1}/{epochs}", leave=True)
-			for batch in self.train_dataloader:
-				self.optimizer.zero_grad()
-
-				input_ids, attention_mask, labels = [b.to(self._device) for b in batch]
-				outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-				
-				loss = outputs.loss
-				loss.backward()
-				self.optimizer.step()
-				train_loss += loss.item()
-
-				if self.log_level == "info":
-					train_bar.update(1)
-					train_bar.set_postfix(loss=train_loss/train_bar.n)
+		tokenizer.pad_token = tokenizer.eos_token
+		model.resize_token_embeddings(len(tokenizer), mean_resizing=False)
 	
-			train_loss /= len(self.train_dataloader)
-			if self.log_level == "info":
-				train_bar.set_postfix({"Loss": train_loss})
-				train_bar.close()
-			history["train_loss"].append(train_loss)
+	output_path = os.path.join(STORAGE_DIR, "models", name)
+	model.save_pretrained(output_path)
+	tokenizer.save_pretrained(output_path)
 
-			history["epoch"].append(epoch)
+def train_model(
+	model_name: str,
+	uuid: str,
+	data_length: int,
+	epochs: int,
+	batch_size: int,
+	gradient_accumulation: int,
+	lr: float,
+	warmup_ratio: float,
+	feat_hide_prob: float,
+	seed: int
+) -> None:
+	set_seed(seed)
 
-			if save_freq and (epoch+1) % save_freq == 0:
-				self._save_checkpoint(epoch=epoch)
+	accelerator = Accelerator()
+	is_main_process = accelerator.is_main_process
+	num_gpus = accelerator.num_processes 
 
-			self.epoch_end_time = time.time()
-			history["time"].append(self.epoch_end_time - self.start_time)
-		
-		if self.notification:
-			notification.notify(title="Training complete", timeout=5)
+	model, tokenizer = load_model(model_name)
 
-		torch.cuda.empty_cache()
+	data_path = os.path.join(SHARED_DIR, "temp", uuid)
 
-		self._save_history(history=history)
-		self._save_config()
+	dataset = DNADatasetFinetune(
+		csv_path=data_path+".csv",
+		tokenizer=tokenizer,
+		dataset_total_length=data_length,
+		feat_hide_prob=feat_hide_prob
+	)
+	dataloader = DataLoader(
+		dataset=dataset,
+		batch_size=batch_size,
+		collate_fn=FinetuneDataCollator(tokenizer)
+	)
 
-		if save_at_end:
-			self.save_checkpoint()
+	optimizer = AdamW(model.parameters(), lr=lr)
+	num_training_steps = epochs * len(dataloader)
+	num_warmup_steps = int(warmup_ratio * num_training_steps)
+
+	lr_scheduler = get_scheduler(
+		name="cosine",
+		optimizer=optimizer,
+		num_warmup_steps=num_warmup_steps,
+		num_training_steps=num_training_steps
+	)
+
+	model, optimizer, dataloader, lr_scheduler = accelerator.prepare(
+		model, optimizer, dataloader, lr_scheduler
+	)
+
+	dataloader_len_local = len(dataloader)
+
+	history = {"epoch": [], "time": [], "train_loss": [], "lr": []}
+	start_time = time.time()
+
+	num_update_steps_per_epoch = ceil(dataloader_len_local / gradient_accumulation)
+	max_train_steps = epochs * num_update_steps_per_epoch
+
+	global_step = 0
+	model.train()
+	for epoch in range(epochs):
+		train_loss = 0.0
+
+		accumulated_loss = 0.0
+		for batch_idx, batch in enumerate(dataloader):
+			outputs = model(**batch)
+			loss = outputs.loss / gradient_accumulation
+
+			accelerator.backward(loss)
+			accumulated_loss += loss.item()
+
+			if (batch_idx + 1) % gradient_accumulation == 0 or (batch_idx + 1 == dataloader_len_local):
+				accelerator.clip_grad_norm_(model.parameters(), max_norm=0.5)
+
+				optimizer.step()
+				lr_scheduler.step()
+				optimizer.zero_grad()
+
+				loss_val = loss.item()
+				train_loss += loss_val
+				global_step += 1
+
+				steps_in_epoch = ceil(dataloader_len_local / gradient_accumulation)
+				current_epoch_fraction = epoch + (global_step % steps_in_epoch) / steps_in_epoch
+
+				current_lr = lr_scheduler.get_last_lr()[0]
+
+				history["epoch"].append(round(current_epoch_fraction, 2))
+				history["train_loss"].append(accumulated_loss)
+				history["lr"].append(current_lr)
+				history["time"].append(time.time() - start_time)
+
+				accumulated_loss = 0.0
 	
-	def evaluate(self):
+	accelerator.wait_for_everyone()
+	model = accelerator.unwrap_model(model)
+
+	if is_main_process:
+		save_model(model_name, model, tokenizer, history)
+	
+	accelerator.wait_for_everyone()
+	accelerator.end_training()
+
+def evaluate(
+	model_name: str,
+	uuid: str,
+	data_length: int
+) -> tuple[float, float, float]:
+	model, tokenizer = load_model(model_name)
+
+	return 0,0,0
+
+def predict(
+	model_name: str,
+	uuid: str,
+	input_text: str
+) -> str:
+	model, tokenizer = load_model(model_name)
+
+	return ''
+
+def evaluate(self):
 		if not hasattr(self, "test_dataloader"):
 			raise ValueError("Can't find the test dataloader, make sure you initialized it.")
 		
