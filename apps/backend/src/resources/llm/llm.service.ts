@@ -11,7 +11,6 @@ const GPTS_MODELS = ['gpt2', 'gpt2-medium'];
 const ALLOWED_MODELS: Record<string, (modelName: string) => boolean> = {
   EXINCLASSIFIER: (name) =>
     [...GPTS_MODELS, 'bert-base-uncased', 'dnabert'].includes(name),
-  EXINTRANSLATOR: (name) => [...GPTS_MODELS, 't5-base'].includes(name),
   SLIDINGWINDOWEXTRACTION: (name) =>
     [...GPTS_MODELS, 'bert-base-uncased', 'dnabert'].includes(name),
   PROTEINTRANSLATOR: (name) => [...GPTS_MODELS, 't5-base'].includes(name),
