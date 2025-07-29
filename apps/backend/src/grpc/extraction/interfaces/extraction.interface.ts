@@ -18,7 +18,6 @@ export interface ExtractionResponse {
 
 export interface ExtractionService {
   ExInClassifierGenbank(req: ExtractionRequest): Observable<ExtractionResponse>;
-  ExInTranslatorGenbank(req: ExtractionRequest): Observable<ExtractionResponse>;
   SlidingWindowTaggerGenbank(
     req: ExtractionRequest,
   ): Observable<ExtractionResponse>;
@@ -26,7 +25,6 @@ export interface ExtractionService {
     req: ExtractionRequest,
   ): Observable<ExtractionResponse>;
   ExInClassifierGencode(req: ExtractionRequest): Observable<ExtractionResponse>;
-  ExInTranslatorGencode(req: ExtractionRequest): Observable<ExtractionResponse>;
   SlidingWindowTaggerGencode(
     req: ExtractionRequest,
   ): Observable<ExtractionResponse>;

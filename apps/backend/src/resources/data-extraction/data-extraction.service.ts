@@ -204,17 +204,6 @@ export class DataExtractionService {
         response.genbank.ExInClassifier = taskId;
       }
 
-      if (genbank.ExInTranslator) {
-        const approach = ApproachEnum.EXINTRANSLATOR;
-        const taskId = await this.extractionTask({
-          extractor: 'ExInTranslatorGenbank',
-          annotationsPath,
-          origin,
-          approach,
-        });
-        response.genbank.ExInTranslator = taskId;
-      }
-
       if (genbank.SlidingWindowTagger) {
         const approach = ApproachEnum.SLIDINGWINDOWEXTRACTION;
         const taskId = await this.extractionTask({
@@ -253,18 +242,6 @@ export class DataExtractionService {
           fastaPath,
         });
         response.gencode.ExInClassifier = taskId;
-      }
-
-      if (gencode.ExInTranslator) {
-        const approach = ApproachEnum.EXINTRANSLATOR;
-        const taskId = await this.extractionTask({
-          extractor: 'ExInTranslatorGencode',
-          annotationsPath,
-          origin,
-          approach,
-          fastaPath,
-        });
-        response.gencode.ExInTranslator = taskId;
       }
 
       if (gencode.SlidingWindowTagger) {

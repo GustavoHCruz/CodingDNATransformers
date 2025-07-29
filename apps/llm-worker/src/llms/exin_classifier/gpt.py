@@ -277,7 +277,42 @@ def evaluate(
 	uuid: str,
 	data_length: int
 ) -> tuple[float, float, float]:
+	accelerator = Accelerator()
+
 	model, tokenizer = load_model(model_name)
+
+	total_loss = 0
+	total_correct = 0
+	total_samples = 0
+	exon_correct = 0
+	exon_total = 0
+	intron_correct = 0
+	intron_total = 0
+
+	data_path = "exin_test"
+	dataset = DNADatasetFinetune(
+		csv_path=data_path+".csv",
+		tokenizer=tokenizer,
+		dataset_total_length=30000,
+		feat_hide_prob=0.2
+	)
+	dataloader = DataLoader(
+		dataset=dataset,
+		batch_size=1,
+		collate_fn=FinetuneDataCollator(tokenizer)
+	)
+
+	model, dataloader = accelerator.prepare(model, dataloader)
+
+	model.
+
+	model.eval()
+	with torch.no_grad():
+		for batch in dataloader:
+			preds = model.generate(
+				input_ids=batch["input_ids"],
+				attention_mask=batch["attention_mask"]
+			)
 
 	return 0,0,0
 
