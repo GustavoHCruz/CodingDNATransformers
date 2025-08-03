@@ -3,25 +3,36 @@ syntax = "proto3";
 package extraction;
 
 service ExtractionService {
-  rpc ExInClassifierGenbank (ExtractionRequest) returns (stream ExtractionResponse);
-  rpc SlidingWindowTaggerGenbank (ExtractionRequest) returns (stream ExtractionResponse);
-  rpc ProteinTranslatorGenbank (ExtractionRequest) returns (stream ExtractionResponse);
-  rpc ExInClassifierGencode (ExtractionRequest) returns (stream ExtractionResponse);
-  rpc SlidingWindowTaggerGencode (ExtractionRequest) returns (stream ExtractionResponse);
-  rpc ProteinTranslatorGencode (ExtractionRequest) returns (stream ExtractionResponse);
+  rpc Extract (ExtractionRequest) returns (stream ExtractionResponse);
 }
 
 message ExtractionRequest {
-  int32 sequenceMaxLength = 1;
-  string annotationsPath = 2;
-  optional string fastaPath = 3;
+  string path = 1;
+}
+
+message ExInRegion {
+  string sequence = 1;
+  string type = 2;
+  int32 start = 3;
+  int32 end = 4;
+  optional string gene = 5;
+  optional int32 strand = 6;
+  optional string before = 7;
+  optional string after = 8;
+}
+
+message CDSRegion {
+  string sequence = 1;
+  string type = 2;
+  int32 start = 3;
+  int32 end = 4;
+  string gene = 5;
 }
 
 message ExtractionResponse {
   string sequence = 1;
-  string target = 2;
-  string flankBefore = 3;
-  string flankAfter = 4;
-  string organism = 5;
-  string gene = 6;
+  string accession = 2;
+  string organism = 3;
+  repeated CDSRegion cds = 4;
+  repeated ExInRegion exin = 5;
 }
