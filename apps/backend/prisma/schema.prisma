@@ -37,8 +37,8 @@ model ProgressTracker {
 
 enum ApproachEnum {
   EXINCLASSIFIER
-  SLIDINGWINDOWEXTRACTION
-  PROTEINTRANSLATOR
+  TRIPLETCLASSIFIER
+  DNATRANSLATOR
 }
 
 model RawFileInfo {
