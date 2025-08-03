@@ -1,13 +1,19 @@
 import csv
 import os
 import random
+import sys
 import time
+import tokenize
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from math import ceil
 from typing import Any, Generator
 
 import torch
 from accelerate import Accelerator
 from config import SHARED_DIR, STORAGE_DIR
+from redis_service import (CreateField, EvalField, ProcessingStatus,
+                           TrainField, redis_service)
 from torch.nn.utils.rnn import pad_sequence
 from torch.optim import AdamW
 from torch.utils.data import DataLoader, IterableDataset
@@ -61,7 +67,7 @@ class DNADatasetFinetune(IterableDataset):
 			dataset_total_length: int,
 			feat_hide_prob: float,
 			flanks_size: int = 25,
-			sequence_max_length: int = 1024,
+			sequence_max_length: int = 512,
 		) -> None:
 			self.csv_path = csv_path
 			self.tokenizer = tokenizer
@@ -141,8 +147,10 @@ def create_model(
 	checkpoint: str,
 	name: str,
 	uuid: str,
-	is_child: bool
+	is_child: bool = False
 ) -> None:
+	redis_service.set_create_info(uuid, CreateField.STATUS, ProcessingStatus.IN_PROGRESS)
+
 	if is_child:
 		parent_checkpoint = os.path.join(STORAGE_DIR, "models", name)
 		model = AutoModelForCausalLM.from_pretrained(
@@ -170,6 +178,8 @@ def create_model(
 	model.save_pretrained(output_path)
 	tokenizer.save_pretrained(output_path)
 
+	redis_service.set_create_info(uuid, CreateField.STATUS, ProcessingStatus.DONE)
+
 def train_model(
 	model_name: str,
 	uuid: str,
@@ -182,11 +192,20 @@ def train_model(
 	feat_hide_prob: float,
 	seed: int
 ) -> None:
+	redis_service.set_train_info(uuid, TrainField.STATUS, ProcessingStatus.IN_PROGRESS)
+
 	set_seed(seed)
 
 	accelerator = Accelerator()
 	is_main_process = accelerator.is_main_process
-	num_gpus = accelerator.num_processes 
+	num_gpus = accelerator.num_processes
+
+	if is_main_process:
+		redis_service.set_train_info(
+			uuid=uuid,
+			field=TrainField.GPU_AMOUNT,
+			value=num_gpus
+		)
 
 	model, tokenizer = load_model(model_name)
 
@@ -227,6 +246,13 @@ def train_model(
 	num_update_steps_per_epoch = ceil(dataloader_len_local / gradient_accumulation)
 	max_train_steps = epochs * num_update_steps_per_epoch
 
+	if is_main_process:
+		redis_service.set_train_info(
+			uuid=uuid,
+			field=TrainField.TOTAL_STEPS,
+			value=max_train_steps
+		)
+
 	global_step = 0
 	model.train()
 	for epoch in range(epochs):
@@ -256,10 +282,27 @@ def train_model(
 
 				current_lr = lr_scheduler.get_last_lr()[0]
 
-				history["epoch"].append(round(current_epoch_fraction, 2))
-				history["train_loss"].append(accumulated_loss)
-				history["lr"].append(current_lr)
-				history["time"].append(time.time() - start_time)
+				if is_main_process:
+					redis_service.set_train_info(
+						uuid=uuid,
+						field=TrainField.LOSS,
+						value=loss_val
+					)
+					redis_service.set_train_info(
+						uuid=uuid,
+						field=TrainField.LR,
+						value=current_lr
+					)
+					redis_service.set_train_info(
+						uuid=uuid,
+						field=TrainField.STEP,
+						value=global_step
+					)
+
+					history["epoch"].append(round(current_epoch_fraction, 2))
+					history["train_loss"].append(accumulated_loss)
+					history["lr"].append(current_lr)
+					history["time"].append(time.time() - start_time)
 
 				accumulated_loss = 0.0
 	
@@ -272,140 +315,52 @@ def train_model(
 	accelerator.wait_for_everyone()
 	accelerator.end_training()
 
+	redis_service.set_train_info(
+		uuid=uuid,
+		field=TrainField.STATUS,
+		value=ProcessingStatus.DONE
+	)
+
 def evaluate(
 	model_name: str,
 	uuid: str,
-	data_length: int
-) -> tuple[float, float, float]:
-	model, tokenizer = load_model(model_name)
-
-	return 0,0,0
-
-def predict(
-	model_name: str,
-	uuid: str,
-	input_text: str
-) -> str:
-	model, tokenizer = load_model(model_name)
-
-	return ''
-
-def evaluate(self):
-		if not hasattr(self, "test_dataloader"):
-			raise ValueError("Can't find the test dataloader, make sure you initialized it.")
-		
-		if not hasattr(self, "_logs_dir"):
-			self._get_next_model_dir()
-
-		self.model.to(self._device)
-		total_loss = 0
-		total_correct = 0
-		total_samples = 0
-		exon_correct = 0
-		exon_total = 0
-		intron_correct = 0
-		intron_total = 0
-
-		self.model.eval()
-		with torch.no_grad():
-			if self.log_level == "info":
-				eval_bar = tqdm(self.test_dataloader, desc="Evaluating", leave=True)
-			for batch in self.test_dataloader:
-				input_ids, attention_mask, labels = [b.to(self._device) for b in batch]
-
-				outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-				loss = outputs.loss
-				total_loss += loss.item()
-
-				filtered_input_ids = [ids[mask.bool()] for ids, mask in zip(input_ids, attention_mask)]
-				preds = []
-				for filtered_input in filtered_input_ids:
-					prediction = self.model.generate(
-						input_ids=filtered_input.unsqueeze(0),
-						attention_mask=torch.tensor([1]*filtered_input.size(-1)).unsqueeze(0).to(self._device),
-						repetition_penalty=2.0,
-						max_new_tokens=1,
-						pad_token_id=self.tokenizer.eos_token_id
-					)
-
-					preds.append(prediction[0][filtered_input.size(-1)])
-
-				label_texts = [label[label != -100] for label in labels]
-
-				for pred, label in zip(preds, label_texts):
-					if pred == label:
-						total_correct += 1
-
-						if label.item() == self.exon_token[0]:
-							exon_correct += 1
-						else:
-							intron_correct += 1
-
-					if label.item() == self.exon_token[0]:
-						exon_total += 1
-					else:
-						intron_total += 1
-
-					total_samples += 1
-
-				if self.log_level == "info":
-					eval_bar.update(1)
-					eval_bar.set_postfix(loss=total_loss/eval_bar.n)
-
-		if self.log_level == "info":
-			eval_bar.close()		
-		avg_loss = total_loss / len(self.test_dataloader)
-		overall_accuracy = total_correct / total_samples if total_samples > 0 else 0.0
-		exon_accuracy = exon_correct / exon_total if exon_total > 0 else 0.0
-		intron_accuracy = intron_correct / intron_total if intron_total > 0 else 0.0
-
-		print(f"Evaluation complete")
-		print(f"Average loss: {avg_loss:.4f}")
-		print(f"Overall Accuracy: {overall_accuracy:.4f}")
-		print(f"Exon accuracy: {exon_accuracy:.4f}")
-		print(f"Intron accuracy: {intron_accuracy:.4f}")
-
-		self._eval_results = {
-			"avg loss": avg_loss,
-			"overall accuracy": overall_accuracy,
-			"exon accuracy": exon_accuracy,
-			"intron accuracy": intron_accuracy
-		}
-
-		self._save_evaluation_results()
-
-		if self.notification:
-			notification.notify(title="Evaluation complete", timeout=5)
+	data_length: int,
+	batch_size: int,
+	seed: int
+):
+	redis_service.set_eval_info(uuid, EvalField.STATUS, ProcessingStatus.IN_PROGRESS)
 	
-	def _prediction_mapping(self, prediction):
-		return prediction.replace("[", "").replace("]", "").lower()
+	set_seed(seed)
 
-	def predict_single(self, data, map_pred=True):
-		sequence = self._process_sequence(data["sequence"])
+	model, tokenizer = load_model(model_name)
+
+	data_path = os.path.join(SHARED_DIR, "temp", uuid)
+
+	dataset = DNADatasetFinetune(
+		csv_path=data_path+".csv",
+		tokenizer=tokenizer,
+		dataset_total_length=data_length,
+		feat_hide_prob=0.0
+	)
+	dataloader = DataLoader(
+		dataset=dataset,
+		batch_size=batch_size,
+		collate_fn=FinetuneDataCollator(tokenizer)
+	)
+
+	model.to("cuda")
+
+	model.eval()
+	with torch.no_grad():
+		for batch in dataloader:
+			input_ids, attention_mask, labels = [b.to(model.device) for b in batch]
 		
-		keys = ["gene", "organism", "flank_before", "flank_after"]
-		input_text = f"Sequence: {sequence}\n"
-		for key in keys:
-			if hasattr(data, key):
-				input_text += f"{key.capitalize()}: {data[key]}\n"
-		input_text += "Answer: "
+			for i, a, l in zip(input_ids, attention_mask, labels):
+				prediction = model.generate(
+					input_ids=i,
+					attention_mask=a,
+					max_new_tokens=1,
+				)
 
-		input_ids = self.tokenizer.encode(input_text, return_tensors="pt").to(self._device)
-
-		self.model.eval()
-		with torch.no_grad():
-			outputs = self.model.generate(
-				input_ids=input_ids,
-				attention_mask=torch.tensor([1]*input_ids.size(-1)).unsqueeze(0).to(self._device),
-				max_new_tokens=1,
-				repetition_penalty=2.0,
-				pad_token_id=self.tokenizer.eos_token_id,
-			)
-
-		generated_token_ids = outputs[0]
-		new_token = self.tokenizer.decode(generated_token_ids[input_ids.size(-1)], skip_special_tokens=True).strip()
-
-		if map_pred:
-			return self._prediction_mapping(new_token)
-		
-		return new_token
+				if prediction[0][-1] == labels[-1]:
+					
