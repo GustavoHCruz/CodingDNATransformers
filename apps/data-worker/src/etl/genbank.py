@@ -70,61 +70,6 @@ def exin_classifier_gb(annotations_file_path: str, seq_max_len=512, flank_max_le
 					gene=gene
 				)
 
-def exin_translator_gb(annotations_file_path: str, seq_max_len=512):
-	with open(annotations_file_path, "r") as gb_file:
-		for record in SeqIO.parse(gb_file, "genbank"):
-			sequence = record.seq
-
-			if len(sequence) > seq_max_len or isinstance(record.seq._data, (_UndefinedSequenceData, _PartiallyDefinedSequenceData)):
-				continue
-
-			organism = record.annotations.get("organism", "")
-
-			sites = []
-			strand_invalid = False
-			for feature in record.features:
-				if feature.type in ["intron", "exon"]:
-					location = feature.location
-			
-					strand = None
-					if hasattr(location, "strand"):
-						strand = location.strand
-					if strand is None:
-						strand_invalid = True
-						break
-
-					site_seq = sequence[location.start:location.end]
-					if strand == -1:
-						site_seq = site_seq.reverse_complement()
-
-					sites.append({
-						"sequence": site_seq,
-						"start": location.start,
-						"end": location.end,
-						"type": "intron" if feature.type == "intron" else "exon",
-					})
-			
-			if strand_invalid:
-				continue
-
-			final_sequence = []
-			last_index = 0
-			for site in sorted(sites, key=lambda x: x["start"]):
-				final_sequence.append(str(sequence[last_index:site["start"]]))
-				final_sequence.append(f"({site["type"]})")
-				final_sequence.append(str(sequence[site["start"]:site["end"]]))
-				final_sequence.append(f"({site["type"]})")
-				last_index = site["end"]
-			
-			final_sequence.append(str(sequence[last_index:]))
-			final_sequence = "".join(final_sequence)
-
-			yield dict(
-				sequence=str(sequence),
-				target=final_sequence,
-				organism=str(organism),
-			)
-
 def sliding_window_tagger_gb(annotations_file_path: str, seq_max_len=512):
 	with open(annotations_file_path, "r") as gb_file:
 		for record in SeqIO.parse(gb_file, "genbank"):
