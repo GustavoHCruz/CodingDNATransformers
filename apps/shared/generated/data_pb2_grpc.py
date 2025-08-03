@@ -38,11 +38,6 @@ class ExtractionServiceStub(object):
                 request_serializer=data__pb2.ExtractionRequest.SerializeToString,
                 response_deserializer=data__pb2.ExtractionResponse.FromString,
                 _registered_method=True)
-        self.ExInTranslatorGenbank = channel.unary_stream(
-                '/extraction.ExtractionService/ExInTranslatorGenbank',
-                request_serializer=data__pb2.ExtractionRequest.SerializeToString,
-                response_deserializer=data__pb2.ExtractionResponse.FromString,
-                _registered_method=True)
         self.SlidingWindowTaggerGenbank = channel.unary_stream(
                 '/extraction.ExtractionService/SlidingWindowTaggerGenbank',
                 request_serializer=data__pb2.ExtractionRequest.SerializeToString,
@@ -55,11 +50,6 @@ class ExtractionServiceStub(object):
                 _registered_method=True)
         self.ExInClassifierGencode = channel.unary_stream(
                 '/extraction.ExtractionService/ExInClassifierGencode',
-                request_serializer=data__pb2.ExtractionRequest.SerializeToString,
-                response_deserializer=data__pb2.ExtractionResponse.FromString,
-                _registered_method=True)
-        self.ExInTranslatorGencode = channel.unary_stream(
-                '/extraction.ExtractionService/ExInTranslatorGencode',
                 request_serializer=data__pb2.ExtractionRequest.SerializeToString,
                 response_deserializer=data__pb2.ExtractionResponse.FromString,
                 _registered_method=True)
@@ -84,12 +74,6 @@ class ExtractionServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def ExInTranslatorGenbank(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
     def SlidingWindowTaggerGenbank(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -103,12 +87,6 @@ class ExtractionServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def ExInClassifierGencode(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def ExInTranslatorGencode(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -134,11 +112,6 @@ def add_ExtractionServiceServicer_to_server(servicer, server):
                     request_deserializer=data__pb2.ExtractionRequest.FromString,
                     response_serializer=data__pb2.ExtractionResponse.SerializeToString,
             ),
-            'ExInTranslatorGenbank': grpc.unary_stream_rpc_method_handler(
-                    servicer.ExInTranslatorGenbank,
-                    request_deserializer=data__pb2.ExtractionRequest.FromString,
-                    response_serializer=data__pb2.ExtractionResponse.SerializeToString,
-            ),
             'SlidingWindowTaggerGenbank': grpc.unary_stream_rpc_method_handler(
                     servicer.SlidingWindowTaggerGenbank,
                     request_deserializer=data__pb2.ExtractionRequest.FromString,
@@ -151,11 +124,6 @@ def add_ExtractionServiceServicer_to_server(servicer, server):
             ),
             'ExInClassifierGencode': grpc.unary_stream_rpc_method_handler(
                     servicer.ExInClassifierGencode,
-                    request_deserializer=data__pb2.ExtractionRequest.FromString,
-                    response_serializer=data__pb2.ExtractionResponse.SerializeToString,
-            ),
-            'ExInTranslatorGencode': grpc.unary_stream_rpc_method_handler(
-                    servicer.ExInTranslatorGencode,
                     request_deserializer=data__pb2.ExtractionRequest.FromString,
                     response_serializer=data__pb2.ExtractionResponse.SerializeToString,
             ),
@@ -195,33 +163,6 @@ class ExtractionService(object):
             request,
             target,
             '/extraction.ExtractionService/ExInClassifierGenbank',
-            data__pb2.ExtractionRequest.SerializeToString,
-            data__pb2.ExtractionResponse.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def ExInTranslatorGenbank(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_stream(
-            request,
-            target,
-            '/extraction.ExtractionService/ExInTranslatorGenbank',
             data__pb2.ExtractionRequest.SerializeToString,
             data__pb2.ExtractionResponse.FromString,
             options,
@@ -303,33 +244,6 @@ class ExtractionService(object):
             request,
             target,
             '/extraction.ExtractionService/ExInClassifierGencode',
-            data__pb2.ExtractionRequest.SerializeToString,
-            data__pb2.ExtractionResponse.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def ExInTranslatorGencode(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_stream(
-            request,
-            target,
-            '/extraction.ExtractionService/ExInTranslatorGencode',
             data__pb2.ExtractionRequest.SerializeToString,
             data__pb2.ExtractionResponse.FromString,
             options,
