@@ -1,10 +1,13 @@
 import { Body, Controller, Post } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
 import { DatasetGenerationService } from './dataset-generation.service';
 import {
-  CreateDatasetGenerationDto,
-  CreateDatasetGenerationDtoResponse,
-} from './dto/create-dataset-generation.dto';
+  CreateProcessedDatasetsDto,
+  CreateProcessedDatasetsDtoResponse,
+} from './dto/create-processed-datasets.dto';
+import {
+  CreateRawDatasetsDto,
+  CreateRawDatasetsDtoResponse,
+} from './dto/create-raw-datasets.dto';
 
 @Controller('dataset-generation')
 export class DatasetGenerationController {
@@ -12,11 +15,17 @@ export class DatasetGenerationController {
     private readonly datasetGenerationService: DatasetGenerationService,
   ) {}
 
-  @ApiTags('dataset-generation')
-  @Post()
-  async createDatasetGeneration(
-    @Body() data: CreateDatasetGenerationDto,
-  ): Promise<CreateDatasetGenerationDtoResponse[]> {
+  @Post('/raw-datasets')
+  async generateRawDatasets(
+    @Body() data: CreateRawDatasetsDto,
+  ): Promise<CreateRawDatasetsDtoResponse[]> {
+    return this.datasetGenerationService.generateRawDatasets(data);
+  }
+
+  @Post('/processed-datasets')
+  async generateProcessedDatasets(
+    @Body() data: CreateProcessedDatasetsDto,
+  ): Promise<CreateProcessedDatasetsDtoResponse[]> {
     return await this.datasetGenerationService.generateProcessedDatasets(data);
   }
 }

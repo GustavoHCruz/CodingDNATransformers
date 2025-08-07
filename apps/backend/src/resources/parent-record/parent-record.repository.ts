@@ -14,16 +14,56 @@ export class ParentRecordRepository {
     return this.prisma.parentRecord.findUnique({ where: { id } });
   }
 
-  findByApproach(approach: ApproachEnum, limit = 100) {
-    return this.prisma.parentRecord.findMany({
-      select: { id: true },
-      where: {
-        parentDataset: {
-          approach,
+  async findByApproach(approach: ApproachEnum, limit = 100) {
+    const [intronCount, exonCount] = await Promise.all([
+      this.prisma.parentRecord.count({
+        where: {
+          target: 'INTRON',
+          parentDataset: {
+            approach,
+          },
         },
-      },
-      take: limit,
-    });
+      }),
+      this.prisma.parentRecord.count({
+        where: {
+          target: 'EXON',
+          parentDataset: {
+            approach,
+          },
+        },
+      }),
+    ]);
+
+    const minCount = Math.min(intronCount, exonCount);
+
+    const [introns, exons] = await Promise.all([
+      this.prisma.parentRecord.findMany({
+        select: {
+          id: true,
+        },
+        where: {
+          target: 'INTRON',
+          parentDataset: {
+            approach,
+          },
+        },
+        take: minCount,
+      }),
+      this.prisma.parentRecord.findMany({
+        select: {
+          id: true,
+        },
+        where: {
+          target: 'EXON',
+          parentDataset: {
+            approach,
+          },
+        },
+        take: minCount,
+      }),
+    ]);
+
+    return [...introns, ...exons];
   }
 
   async findByApproachInBatches(

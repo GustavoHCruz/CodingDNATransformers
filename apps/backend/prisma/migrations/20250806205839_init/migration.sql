@@ -5,10 +5,13 @@ CREATE TYPE "ProgressTypeEnum" AS ENUM ('COUNTER', 'PERCENTAGE');
 CREATE TYPE "ProgressStatusEnum" AS ENUM ('IN_PROGRESS', 'COMPLETE', 'FAILED');
 
 -- CreateEnum
-CREATE TYPE "ApproachEnum" AS ENUM ('EXINCLASSIFIER', 'EXINTRANSLATOR', 'SLIDINGWINDOWEXTRACTION', 'PROTEINTRANSLATOR');
+CREATE TYPE "ApproachEnum" AS ENUM ('EXINCLASSIFIER', 'TRIPLETCLASSIFIER', 'DNATRANSLATOR');
 
 -- CreateEnum
 CREATE TYPE "OriginEnum" AS ENUM ('GENBANK', 'GENCODE');
+
+-- CreateEnum
+CREATE TYPE "FeatureEnum" AS ENUM ('EXON', 'INTRON', 'CDS');
 
 -- CreateTable
 CREATE TABLE "ProgressTracker" (
@@ -22,18 +25,6 @@ CREATE TABLE "ProgressTracker" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "ProgressTracker_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "RawFileInfo" (
-    "id" SERIAL NOT NULL,
-    "fileName" TEXT NOT NULL,
-    "approach" "ApproachEnum" NOT NULL,
-    "totalRecords" INTEGER NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "RawFileInfo_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -61,6 +52,46 @@ CREATE TABLE "ParentRecord" (
     "parentDatasetId" INTEGER NOT NULL,
 
     CONSTRAINT "ParentRecord_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "RawFileInfo" (
+    "id" SERIAL NOT NULL,
+    "fileName" TEXT NOT NULL,
+    "origin" "OriginEnum" NOT NULL,
+    "totalRecords" INTEGER NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "RawFileInfo_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "DNASequence" (
+    "id" SERIAL NOT NULL,
+    "sequence" TEXT NOT NULL,
+    "accession" TEXT,
+    "organism" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "DNASequence_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "FeatureSequence" (
+    "id" SERIAL NOT NULL,
+    "sequence" TEXT NOT NULL,
+    "type" "FeatureEnum" NOT NULL,
+    "start" INTEGER NOT NULL,
+    "end" INTEGER NOT NULL,
+    "gene" TEXT,
+    "strand" INTEGER,
+    "before" TEXT,
+    "after" TEXT,
+    "dnaSequenceId" INTEGER NOT NULL,
+
+    CONSTRAINT "FeatureSequence_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -98,17 +129,9 @@ CREATE TABLE "ChildRecord" (
 -- CreateTable
 CREATE TABLE "ModelHistory" (
     "id" SERIAL NOT NULL,
-    "name" TEXT NOT NULL,
+    "modelAlias" TEXT NOT NULL,
+    "checkpointName" TEXT NOT NULL,
     "approach" "ApproachEnum" NOT NULL,
-    "modelName" TEXT NOT NULL,
-    "path" TEXT NOT NULL,
-    "seed" INTEGER NOT NULL,
-    "epochs" INTEGER NOT NULL,
-    "learningRate" DOUBLE PRECISION NOT NULL,
-    "batchSize" INTEGER NOT NULL,
-    "accuracy" DOUBLE PRECISION NOT NULL,
-    "durationSec" INTEGER NOT NULL,
-    "hideProp" DOUBLE PRECISION,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "parentId" INTEGER,
@@ -119,12 +142,21 @@ CREATE TABLE "ModelHistory" (
 -- CreateTable
 CREATE TABLE "TrainHistory" (
     "id" SERIAL NOT NULL,
-    "epoch" INTEGER NOT NULL,
+    "learningRate" INTEGER NOT NULL,
+    "batchSize" INTEGER NOT NULL,
+    "gradientAccumulation" INTEGER NOT NULL,
+    "warmupRatio" DOUBLE PRECISION NOT NULL,
+    "epochs" INTEGER NOT NULL,
+    "hideProb" DOUBLE PRECISION,
+    "lora" BOOLEAN NOT NULL DEFAULT false,
     "loss" DOUBLE PRECISION NOT NULL,
     "durationSec" INTEGER NOT NULL,
+    "seed" INTEGER NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "modelId" INTEGER NOT NULL,
+    "trainDatasetId" INTEGER,
+    "evalDatasetId" INTEGER,
 
     CONSTRAINT "TrainHistory_pkey" PRIMARY KEY ("id")
 );
@@ -142,11 +174,11 @@ CREATE TABLE "EvalHistory" (
     CONSTRAINT "EvalHistory_pkey" PRIMARY KEY ("id")
 );
 
--- CreateIndex
-CREATE UNIQUE INDEX "ChildDataset_name_key" ON "ChildDataset"("name");
-
 -- AddForeignKey
 ALTER TABLE "ParentRecord" ADD CONSTRAINT "ParentRecord_parentDatasetId_fkey" FOREIGN KEY ("parentDatasetId") REFERENCES "ParentDataset"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FeatureSequence" ADD CONSTRAINT "FeatureSequence_dnaSequenceId_fkey" FOREIGN KEY ("dnaSequenceId") REFERENCES "DNASequence"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ChildDataset" ADD CONSTRAINT "ChildDataset_batchId_fkey" FOREIGN KEY ("batchId") REFERENCES "GenerationBatch"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -162,6 +194,12 @@ ALTER TABLE "ModelHistory" ADD CONSTRAINT "ModelHistory_parentId_fkey" FOREIGN K
 
 -- AddForeignKey
 ALTER TABLE "TrainHistory" ADD CONSTRAINT "TrainHistory_modelId_fkey" FOREIGN KEY ("modelId") REFERENCES "ModelHistory"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TrainHistory" ADD CONSTRAINT "TrainHistory_trainDatasetId_fkey" FOREIGN KEY ("trainDatasetId") REFERENCES "ChildDataset"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TrainHistory" ADD CONSTRAINT "TrainHistory_evalDatasetId_fkey" FOREIGN KEY ("evalDatasetId") REFERENCES "ChildDataset"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "EvalHistory" ADD CONSTRAINT "EvalHistory_modelId_fkey" FOREIGN KEY ("modelId") REFERENCES "ModelHistory"("id") ON DELETE CASCADE ON UPDATE CASCADE;
