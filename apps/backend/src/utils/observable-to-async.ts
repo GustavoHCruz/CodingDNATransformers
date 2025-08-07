@@ -8,9 +8,10 @@ export function observableToAsyncIterable<T>(
       const buffer: T[] = [];
       const queue: ((value: IteratorResult<T>) => void)[] = [];
       let isComplete = false;
-      let error: any = null;
+      let hasError = false;
+      let storedError: any = null;
 
-      observable.subscribe({
+      const subscription = observable.subscribe({
         next: (value) => {
           if (queue.length > 0) {
             const resolve = queue.shift()!;
@@ -20,7 +21,12 @@ export function observableToAsyncIterable<T>(
           }
         },
         error: (err) => {
-          error = err;
+          hasError = true;
+          storedError = err;
+          while (queue.length > 0) {
+            const resolve = queue.shift()!;
+            resolve(Promise.reject(storedError) as any);
+          }
         },
         complete: () => {
           isComplete = true;
@@ -33,7 +39,7 @@ export function observableToAsyncIterable<T>(
 
       return {
         async next(): Promise<IteratorResult<T>> {
-          if (error) throw error;
+          if (hasError) throw storedError;
           if (buffer.length > 0) {
             return { value: buffer.shift()!, done: false };
           }
@@ -43,6 +49,14 @@ export function observableToAsyncIterable<T>(
           return new Promise<IteratorResult<T>>((resolve) => {
             queue.push(resolve);
           });
+        },
+        async return() {
+          subscription.unsubscribe();
+          return { value: undefined, done: true };
+        },
+        async throw(err) {
+          subscription.unsubscribe();
+          throw err;
         },
       };
     },

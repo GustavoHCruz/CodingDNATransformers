@@ -20,7 +20,7 @@ export class ChildDatasetSettingsDto {
   size: number;
 }
 
-export class CreateDatasetGenerationDto {
+export class CreateProcessedDatasetsDto {
   @IsOptional()
   @IsString()
   batchName?: string;
@@ -37,7 +37,7 @@ export class CreateDatasetGenerationDto {
   seed?: number = 1234;
 }
 
-export class CreateDatasetGenerationDtoResponse {
+export class CreateProcessedDatasetsDtoResponse {
   @IsString()
   name: string;
 

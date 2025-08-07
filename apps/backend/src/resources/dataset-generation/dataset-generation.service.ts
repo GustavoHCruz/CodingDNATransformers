@@ -7,9 +7,13 @@ import { GenerationBatchService } from '@resources/generation-batch/generation-b
 import { ParentRecordService } from '@resources/parent-record/parent-record.service';
 import { ProgressTrackerService } from '@resources/progress-tracker/progress-tracker.service';
 import {
-  CreateDatasetGenerationDto,
-  CreateDatasetGenerationDtoResponse,
-} from './dto/create-dataset-generation.dto';
+  CreateProcessedDatasetsDto,
+  CreateProcessedDatasetsDtoResponse,
+} from './dto/create-processed-datasets.dto';
+import {
+  CreateRawDatasetsDto,
+  CreateRawDatasetsDtoResponse,
+} from './dto/create-raw-datasets.dto';
 
 @Injectable()
 export class DatasetGenerationService {
@@ -63,9 +67,9 @@ export class DatasetGenerationService {
   }
 
   async generateProcessedDatasets(
-    data: CreateDatasetGenerationDto,
-  ): Promise<CreateDatasetGenerationDtoResponse[]> {
-    const responses: CreateDatasetGenerationDtoResponse[] = [];
+    data: CreateProcessedDatasetsDto,
+  ): Promise<CreateProcessedDatasetsDtoResponse[]> {
+    const responses: CreateProcessedDatasetsDtoResponse[] = [];
 
     const totalAvailable = await this.parentRecordService.countByApproach(
       data.approach,
@@ -136,5 +140,12 @@ export class DatasetGenerationService {
     }
 
     return responses;
+  }
+
+  async generateRawDatasets(
+    data: CreateRawDatasetsDto,
+  ): Promise<CreateRawDatasetsDtoResponse[]> {
+    
+    return [];
   }
 }

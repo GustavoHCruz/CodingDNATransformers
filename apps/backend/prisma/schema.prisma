@@ -41,15 +41,6 @@ enum ApproachEnum {
   DNATRANSLATOR
 }
 
-model RawFileInfo {
-  id           Int          @id @default(autoincrement())
-  fileName     String
-  approach     ApproachEnum
-  totalRecords Int
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-}
-
 enum OriginEnum {
   GENBANK
   GENCODE
@@ -79,6 +70,47 @@ model ParentRecord {
   parentDatasetId Int
   parentDataset   ParentDataset? @relation(fields: [parentDatasetId], references: [id], onDelete: Cascade)
   ChildRecord     ChildRecord[]
+}
+
+model RawFileInfo {
+  id           Int        @id @default(autoincrement())
+  fileName     String
+  origin       OriginEnum
+  totalRecords Int
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model DNASequence {
+  id        Int      @id @default(autoincrement())
+  sequence  String
+  accession String?
+  organism  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  features FeatureSequence[]
+}
+
+enum FeatureEnum {
+  EXON
+  INTRON
+  CDS
+}
+
+model FeatureSequence {
+  id       Int         @id @default(autoincrement())
+  sequence String
+  type     FeatureEnum
+  start    Int
+  end      Int
+  gene     String?
+  strand   Int?
+  before   String?
+  after    String?
+
+  dnaSequenceId Int
+  dnaSequence   DNASequence? @relation(fields: [dnaSequenceId], references: [id])
 }
 
 model GenerationBatch {

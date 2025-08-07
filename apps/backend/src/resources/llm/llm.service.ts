@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { ChildRecordService } from '@resources/child-record/child-record.service';
 import { SHARED_DIR } from 'common/constrants';
 import { format } from 'fast-csv';
 import { createWriteStream } from 'fs';
@@ -18,7 +17,7 @@ const ALLOWED_MODELS: Record<string, (modelName: string) => boolean> = {
 
 @Injectable()
 export class LlmService {
-  constructor(private readonly childRecordService: ChildRecordService) {}
+  constructor() {}
 
   async generateCsvFromChildDataset(
     executionUuid: string,
@@ -29,13 +28,6 @@ export class LlmService {
     const csvName = path.resolve(SHARED_DIR, 'temp', `${executionUuid}.csv`);
     const writable = createWriteStream(csvName);
     stream.pipe(writable);
-
-    const trainRecordGenerator =
-      this.childRecordService.streamFindAllByChildDatasetId(childDatasetId);
-
-    for await (const record of trainRecordGenerator) {
-      stream.write(record);
-    }
 
     stream.end();
   }

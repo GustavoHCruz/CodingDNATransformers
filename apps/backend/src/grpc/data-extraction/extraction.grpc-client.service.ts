@@ -18,10 +18,7 @@ export class ExtractionGrpcClientService implements OnModuleInit {
       this.client.getService<ExtractionService>('ExtractionService');
   }
 
-  call(
-    method: keyof ExtractionService,
-    req: ExtractionRequest,
-  ): Observable<ExtractionResponse> {
-    return this.extractionService[method](req);
+  callExtract(req: ExtractionRequest): Observable<ExtractionResponse> {
+    return this.extractionService.Extract(req);
   }
 }

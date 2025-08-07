@@ -1,10 +1,7 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Controller, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { DataExtractionService } from './data-extraction.service';
-import {
-  CreateDataExtractionDto,
-  CreateDataExtractionResponseDto,
-} from './dto/data-extraction.dto';
+import { DataExtractionReturn } from './dto/approachs.dto';
 
 @Controller('data-extraction')
 export class DataExtractionController {
@@ -12,9 +9,7 @@ export class DataExtractionController {
 
   @ApiTags('data-extraction')
   @Post()
-  async dataExtraction(
-    @Body() data: CreateDataExtractionDto,
-  ): Promise<CreateDataExtractionResponseDto> {
-    return await this.dataExtractionService.extract(data);
+  async dataExtraction(): Promise<DataExtractionReturn> {
+    return await this.dataExtractionService.extract();
   }
 }

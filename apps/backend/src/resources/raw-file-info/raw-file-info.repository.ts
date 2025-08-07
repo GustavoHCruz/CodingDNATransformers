@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ApproachEnum, Prisma } from '@prisma/client';
+import { OriginEnum, Prisma } from '@prisma/client';
 import { PrismaService } from '@prisma/prisma.service';
 
 @Injectable()
@@ -20,11 +20,11 @@ export class RawFileInfoRepository {
     });
   }
 
-  findOneByFileNameAndApproach(fileName: string, approach: ApproachEnum) {
+  findOneByFileNameAndApproach(fileName: string, origin: OriginEnum) {
     return this.prisma.rawFileInfo.findFirst({
       where: {
         fileName,
-        approach,
+        origin,
       },
     });
   }

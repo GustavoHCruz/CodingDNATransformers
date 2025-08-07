@@ -44,6 +44,9 @@ def extract_data(
 				start = int(location.start)
 				end = int(location.end)
 
+				if not start or not end:
+					continue
+
 				gene = feature.qualifiers.get("gene", "")
 				gene = gene[0] if isinstance(gene, list) else gene
 
@@ -68,15 +71,20 @@ def extract_data(
 					strand = location.strand
 				if strand is None:
 					continue
+
+				start = location.start
+				end = location.end
+				if not start or not end:
+					continue
 				
-				feature_sequence = sequence_dna[location.start:location.end]
+				feature_sequence = sequence_dna[start:end]
 				feature_sequence = str(feature_sequence) if strand == 1 else str(feature_sequence.reverse_complement())
 
 				if len(feature_sequence) < 3:
 					continue
 
-				before = sequence_dna[max(0, location.start - flanks_max_length):location.start]
-				after = sequence_dna[location.end:min(len(sequence_dna), location.end + flanks_max_length)]
+				before = sequence_dna[max(0, start - flanks_max_length):start]
+				after = sequence_dna[end:min(len(sequence_dna), end + flanks_max_length)]
 
 				if strand == 1:
 					before = str(before)
@@ -88,16 +96,16 @@ def extract_data(
 				label = str(feature.type)
 				gene = str(gene[0] if type(gene) == list else gene)
 
-				is_inside_cds = any(location.start >= cds["start"] and location.end <= cds["end"
+				is_inside_cds = any(start >= cds["start"] and end <= cds["end"
 				] for cds in cds_regions)
 				if not is_inside_cds:
 					continue
 
 				exin.append({
 					"sequence": feature_sequence,
-					"type": label,
-					"start": int(location.start),
-					"end": int(location.end),
+					"type": label.upper(),
+					"start": int(start),
+					"end": int(end),
 					"gene": gene,
 					"strand": strand,
 					"before": before,

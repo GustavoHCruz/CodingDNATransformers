@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ApproachEnum, Prisma } from '@prisma/client';
+import { OriginEnum, Prisma } from '@prisma/client';
 import { RawFileInfoRepository } from './raw-file-info.repository';
 
 @Injectable()
@@ -18,8 +18,8 @@ export class RawFileInfoService {
     return this.repository.findOne(id);
   }
 
-  findByFileNameAndApproach(fileName: string, approach: ApproachEnum) {
-    return this.repository.findOneByFileNameAndApproach(fileName, approach);
+  findByFileNameAndApproach(fileName: string, origin: OriginEnum) {
+    return this.repository.findOneByFileNameAndApproach(fileName, origin);
   }
 
   updateRecordCounting(id: number, recordCounting: number) {

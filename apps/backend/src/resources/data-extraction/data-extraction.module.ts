@@ -1,7 +1,7 @@
-import { ExtractionGrpcClientModule } from '@grpc/extraction/extraction.grpc-client.module';
+import { ExtractionGrpcClientModule } from '@grpc/data-extraction/extraction.grpc-client.module';
 import { Module } from '@nestjs/common';
-import { ParentDatasetModule } from '@resources/parent-dataset/parent-dataset.module';
-import { ParentRecordModule } from '@resources/parent-record/parent-record.module';
+import { DnaSequenceModule } from '@resources/dna-sequence/dna-sequence.module';
+import { FeatureSequenceModule } from '@resources/feature-sequence/dna-sequence.module';
 import { ProgressTrackerModule } from '@resources/progress-tracker/progress-tracker.module';
 import { RawFileInfoModule } from '@resources/raw-file-info/raw-file-info.module';
 import { ConfigModule } from 'config/config.module';
@@ -11,8 +11,8 @@ import { DataExtractionService } from './data-extraction.service';
 @Module({
   imports: [
     ConfigModule,
-    ParentDatasetModule,
-    ParentRecordModule,
+    DnaSequenceModule,
+    FeatureSequenceModule,
     ProgressTrackerModule,
     RawFileInfoModule,
     ExtractionGrpcClientModule,

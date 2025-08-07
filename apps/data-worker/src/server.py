@@ -27,23 +27,28 @@ class ExtractionService(data_pb2_grpc.ExtractionService):
 		request,
 		context: grpc.ServicerContext
 	):
-		for item in extract_data(from_request(request)):
-			cds = [
-				data_pb2.CDSRegion(**cds_property) for cds_property in item["cds"]
-			]
-			exin = [
-				data_pb2.ExInRegion(**exin_property) for exin_property in item["exin"]
-			]
+		try:
+			for item in extract_data(from_request(request)):
+				cds = [
+					data_pb2.CDSRegion(**cds_property) for cds_property in item["cds"]
+				]
+				exin = [
+					data_pb2.ExInRegion(**exin_property) for exin_property in item["exin"]
+				]
 
-			response = data_pb2.ExtractionResponse(
-				sequence=item["sequence"],
-				accession=item["accession"],
-				organism=item["organism"],
-				cds=cds,
-				exin=exin
-			)
+				response = data_pb2.ExtractionResponse(
+					sequence=item["sequence"],
+					accession=item["accession"],
+					organism=item["organism"],
+					cds=cds,
+					exin=exin
+				)
 
-			yield response
+				yield response
+		except Exception as e:
+			context.set_code(grpc.StatusCode.INTERNAL)
+			context.set_details(f"Internal error: {str(e)}")
+			return
 
 def server() -> None:
 	config = dotenv_values(".env")
