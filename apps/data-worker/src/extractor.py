@@ -1,4 +1,3 @@
-
 from Bio import SeqIO
 from Bio.Seq import _PartiallyDefinedSequenceData, _UndefinedSequenceData
 from Bio.SeqFeature import CompoundLocation

@@ -22,7 +22,8 @@
       "@resources/*": ["resources/*"],
       "@prisma/*": ["prisma/*"],
       "@config/*": ["config/*"],
-      "@redis/*": ["redis/*"]
+      "@redis/*": ["redis/*"],
+      "@utils/*": ["utils/*"]
     }
   }
 }

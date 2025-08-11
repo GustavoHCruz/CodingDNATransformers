@@ -1,6 +1,6 @@
 import { ExtractionGrpcClientService } from '@grpc/data-extraction/extraction.grpc-client.service';
 import { ExtractionResponse } from '@grpc/data-extraction/interfaces/extraction.interface';
-import { Injectable } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { OriginEnum, ProgressTypeEnum } from '@prisma/client';
 import { DnaSequenceService } from '@resources/dna-sequence/dna-sequence.service';
 
@@ -46,74 +46,78 @@ export class DataExtractionService {
     batchSize: number,
     totalRecords?: number,
   ) {
-    let batch: ExtractionResponse[] = [];
-    let recordCount = 0;
-    const observable = this.extractionService.callExtract({
-      path: annotationsPath,
-    });
+    try {
+      let batch: ExtractionResponse[] = [];
+      let recordCount = 0;
 
-    const asyncIterable = observableToAsyncIterable(observable);
+      const asyncIterable = observableToAsyncIterable(
+        this.extractionService.callExtract({ path: annotationsPath }),
+      );
 
-    for await (const record of asyncIterable) {
-      batch.push(record);
+      const processBatch = async (records: ExtractionResponse[]) => {
+        const cdsAll: any[] = [];
+        const exinAll: any[] = [];
 
-      if (batch.length >= batchSize) {
-        for (const item of batch) {
+        for (const item of records) {
           const { cds, exin, ...dna } = item;
           const dnaSequenceId = (await this.dnaSequenceService.create(dna)).id;
 
-          if (cds) {
-            await this.featureSequenceService.createMany(
-              cds.map((e) => ({ ...e, dnaSequenceId })),
-            );
+          if (cds?.length) {
+            cdsAll.push(...cds.map((e) => ({ ...e, dnaSequenceId })));
           }
-          if (exin) {
-            await this.featureSequenceService.createMany(
-              exin.map((e) => ({ ...e, dnaSequenceId })),
-            );
+          if (exin?.length) {
+            exinAll.push(...exin.map((e) => ({ ...e, dnaSequenceId })));
           }
         }
+
+        if (cdsAll.length) {
+          await this.featureSequenceService.createMany(cdsAll);
+        }
+        if (exinAll.length) {
+          await this.featureSequenceService.createMany(exinAll);
+        }
+      };
+
+      for await (const record of asyncIterable) {
+        batch.push(record);
+
+        if (batch.length >= batchSize) {
+          await processBatch(batch);
+          recordCount += batch.length;
+          batch = [];
+
+          await this.progressTrackerService.postProgress(
+            taskId,
+            recordCount,
+            totalRecords,
+          );
+        }
+      }
+
+      if (batch.length > 0) {
+        await processBatch(batch);
         recordCount += batch.length;
-        batch = [];
-
-        await this.progressTrackerService.postProgress(
-          taskId,
-          recordCount,
-          totalRecords,
-        );
       }
-    }
 
-    if (batch.length > 0) {
-      for (const item of batch) {
-        const { cds, exin, ...dna } = item;
-        const dnaSequenceId = (await this.dnaSequenceService.create(dna)).id;
+      await this.progressTrackerService.postProgress(
+        taskId,
+        recordCount,
+        totalRecords,
+      );
 
-        await this.featureSequenceService.createMany(
-          cds.map((e) => ({ ...e, dnaSequenceId })),
-        );
-        await this.featureSequenceService.createMany(
-          cds.map((e) => ({ ...e, dnaSequenceId })),
-        );
+      if (!totalRecords) {
+        await this.rawFileInfoService.create({
+          origin,
+          totalRecords: recordCount,
+          fileName: annotationsPath,
+        });
       }
-      recordCount += batch.length;
-    }
 
-    await this.progressTrackerService.postProgress(
-      taskId,
-      recordCount,
-      totalRecords,
-    );
-
-    if (!totalRecords) {
-      await this.rawFileInfoService.create({
-        origin,
-        totalRecords: recordCount,
-        fileName: annotationsPath,
-      });
+      await this.progressTrackerService.finish(taskId);
+    } catch (error) {
+      await this.progressTrackerService.finish(taskId, false);
+      throw new InternalServerErrorException(error);
     }
-    await this.progressTrackerService.finish(taskId);
-    await this.progressTrackerService.finish(taskId, false);
   }
 
   async extract(): Promise<DataExtractionReturn> {

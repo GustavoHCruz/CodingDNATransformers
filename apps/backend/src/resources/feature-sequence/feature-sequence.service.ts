@@ -24,4 +24,12 @@ export class FeatureSequenceService {
   remove(id: number) {
     return this.repository.remove(id);
   }
+
+  findExIn(maxLength: number) {
+    return this.repository.findExIn(maxLength);
+  }
+
+  findCds(maxLength: number) {
+    return this.repository.findCDS(maxLength);
+  }
 }
