@@ -12,7 +12,17 @@ files_name:
 
 data_extraction:
   save_batch_len: 2000
-  extraction_max_len: 416
+
+datasets_lengths:
+  EXINCLASSIFIER:
+    gpt: 512
+    bert: 256
+    dnabert: 256
+  TRIPLETCLASSIFIER:
+    bert: 256
+    dnabert: 256
+  DNATRANSLATOR:
+    gpt: 512
 
 dataset_generation:
-  batch_size: 5000
+  batch_size: 2000

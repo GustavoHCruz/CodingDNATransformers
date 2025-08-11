@@ -41,19 +41,26 @@ enum ApproachEnum {
   DNATRANSLATOR
 }
 
+enum ModelTypeEnum {
+  GPT
+  BERT
+  DNABERT
+}
+
 enum OriginEnum {
   GENBANK
   GENCODE
 }
 
 model ParentDataset {
-  id          Int          @id @default(autoincrement())
+  id          Int           @id @default(autoincrement())
   name        String
   approach    ApproachEnum
+  modelType   ModelTypeEnum
   origin      OriginEnum
-  recordCount Int?         @default(0)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  recordCount Int?          @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
   records ParentRecord[]
 }
@@ -123,12 +130,13 @@ model GenerationBatch {
 }
 
 model ChildDataset {
-  id          Int          @id @default(autoincrement())
+  id          Int           @id @default(autoincrement())
   name        String
   approach    ApproachEnum
+  modelType   ModelTypeEnum
   recordCount Int?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
   batchId         Int
   GenerationBatch GenerationBatch? @relation(fields: [batchId], references: [id], onDelete: Cascade)

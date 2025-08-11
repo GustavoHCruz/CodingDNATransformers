@@ -1,52 +1,123 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsInt, IsOptional, ValidateNested } from 'class-validator';
+import {
+  IsBoolean,
+  IsNumber,
+  IsOptional,
+  ValidateNested,
+} from 'class-validator';
 
-class ApproachDto {
-  @ApiProperty()
+class ExInClassifier {
   @IsBoolean()
-  @IsOptional()
-  ExInClassifier?: boolean = false;
+  active: boolean = false;
 
-  @ApiProperty()
   @IsBoolean()
-  @IsOptional()
-  SlidingWindowTagger?: boolean = false;
+  gpt: boolean = false;
 
-  @ApiProperty()
   @IsBoolean()
-  @IsOptional()
-  ProteinTranslator?: boolean = false;
+  bert: boolean = false;
+
+  @IsBoolean()
+  dnabert: boolean = false;
 }
 
-class ApproachResponseDto {
-  @ApiProperty()
-  @IsInt()
+class TripletClassifier {
+  @IsBoolean()
+  active: boolean = false;
+
+  @IsBoolean()
+  bert: boolean = false;
+
+  @IsBoolean()
+  dnabert: boolean = false;
+}
+
+class DNATranslator {
+  @IsBoolean()
+  active: boolean = false;
+
+  @IsBoolean()
+  gpt: boolean = false;
+}
+
+class ExInClassifierResponse {
+  @IsNumber()
   @IsOptional()
-  ExInClassifier?: number;
+  gpt?: number;
+
+  @IsNumber()
+  @IsOptional()
+  bert?: number;
+
+  @IsNumber()
+  @IsOptional()
+  dnabert?: number;
+}
+
+class TripletClassifierResponse {
+  @IsNumber()
+  @IsOptional()
+  bert?: number;
+
+  @IsNumber()
+  @IsOptional()
+  dnabert?: number;
+}
+
+class DNATranslatorResponse {
+  @IsNumber()
+  @IsOptional()
+  gpt?: number;
+}
+
+class Approach {
+  @ValidateNested()
+  @Type(() => ExInClassifier)
+  @IsOptional()
+  ExInClassifier?: ExInClassifier;
+
+  @ValidateNested()
+  @Type(() => TripletClassifier)
+  @IsOptional()
+  TripletClassifier?: TripletClassifier;
+
+  @ValidateNested()
+  @Type(() => DNATranslator)
+  @IsOptional()
+  DNATranslator?: DNATranslator;
+}
+
+class ApproachResponse {
+  @ApiProperty()
+  @ValidateNested()
+  @Type(() => ExInClassifierResponse)
+  @IsOptional()
+  ExInClassifier?: ExInClassifierResponse;
 
   @ApiProperty()
-  @IsInt()
+  @ValidateNested()
+  @Type(() => TripletClassifierResponse)
   @IsOptional()
-  SlidingWindowTagger?: number;
+  TripletClassifier?: TripletClassifierResponse;
 
   @ApiProperty()
-  @IsInt()
+  @ValidateNested()
+  @Type(() => DNATranslatorResponse)
   @IsOptional()
-  ProteinTranslator?: number;
+  DNATranslator?: DNATranslatorResponse;
 }
 
 export class CreateRawDatasetsDto {
   @ApiProperty()
   @IsOptional()
   @ValidateNested()
-  @Type(() => ApproachDto)
-  genbank?: ApproachDto;
+  @Type(() => Approach)
+  genbank?: Approach;
 }
 
 export class CreateRawDatasetsDtoResponse {
   @ApiProperty()
   @ValidateNested()
-  @Type(() => ApproachResponseDto)
-  genbank: ApproachResponseDto = new ApproachResponseDto();
+  @Type(() => ApproachResponse)
+  genbank: ApproachResponse = new ApproachResponse();
 }

@@ -6,8 +6,12 @@ import {
   ConfigYaml,
   DataExtraction,
   DatasetGeneration,
+  DatasetLengths,
+  DNATranslator,
+  ExInClassifier,
   FilesName,
   Paths,
+  TripletClassifier,
 } from './interfaces/config.interface';
 
 @Injectable()
@@ -34,6 +38,22 @@ export class ConfigService {
 
   getDataExtraction(): DataExtraction {
     return this.config.data_extraction;
+  }
+
+  getExInClassifierDatasetsLengths(): ExInClassifier {
+    return this.config.datasets_lengths.EXINCLASSIFIER;
+  }
+
+  getTripletClassifierDatasetsLengths(): TripletClassifier {
+    return this.config.datasets_lengths.TRIPLETCLASSIFIER;
+  }
+
+  getDNATranslatorDatasetsLengths(): DNATranslator {
+    return this.config.datasets_lengths.DNATRANSLATOR;
+  }
+
+  getDatasetsLengths(): DatasetLengths {
+    return this.config.datasets_lengths;
   }
 
   getDatasetGeneration(): DatasetGeneration {

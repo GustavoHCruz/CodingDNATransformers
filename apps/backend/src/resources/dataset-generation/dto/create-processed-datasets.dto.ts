@@ -1,4 +1,4 @@
-import { ApproachEnum } from '@prisma/client';
+import { ApproachEnum, ModelTypeEnum } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   IsEnum,
@@ -27,6 +27,9 @@ export class CreateProcessedDatasetsDto {
 
   @IsEnum(ApproachEnum)
   approach: ApproachEnum;
+
+  @IsEnum(ModelTypeEnum)
+  modelType: ModelTypeEnum;
 
   @ValidateNested({ each: true })
   @Type(() => ChildDatasetSettingsDto)

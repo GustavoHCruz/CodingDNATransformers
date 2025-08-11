@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { FeatureEnum, Prisma } from '@prisma/client';
 import { PrismaService } from '@prisma/prisma.service';
 
 @Injectable()
@@ -30,28 +30,61 @@ export class FeatureSequenceRepository {
     return this.prisma.featureSequence.delete({ where: { id } });
   }
 
-  findExIn(offset, limit, max_length) {
-    return this.prisma.featureSequence.findMany({
-      select: {
-        sequence: true,
-        gene: true,
-        before: true,
-        after: true,
-        type: true,
-      },
-      include: {
-        dnaSequence: {
-          select: {
-            organism: true,
-          },
-        },
-      },
-      where: {
-        sequence.length < max_length,
-        type: {
-          equals: ""
-        }
-      },
-    });
+  async findExIn(maxLength: number) {
+    const results = await this.prisma.$queryRaw<
+      {
+        sequence: string;
+        gene: string;
+        before: string;
+        after: string;
+        type: string;
+        organism: string;
+      }[]
+    >`
+SELECT
+  f.sequence,
+  f.gene,
+  f.before,
+  f.after,
+  f.type,
+  d.organism
+FROM "FeatureSequence" f
+JOIN "DNASequence" d ON f."dnaSequenceId" = d.id
+WHERE LENGTH(f.sequence) < ${maxLength}
+  AND f.type in (${FeatureEnum.EXON},${FeatureEnum.INTRON})
+`;
+    return results;
+  }
+
+  async findCDS(maxLength: number) {
+    const results = await this.prisma.$queryRaw<
+      {
+        sequence: string;
+        protein: string;
+        gene: string;
+        before: string;
+        after: string;
+        organism: string;
+      }[]
+    >`
+    SELECT
+      d.sequence as sequence,
+      f.sequence as protein,
+      f.gene as gene,
+      f.before as before,
+      f.after as after,
+      d.organism as organism
+    FROM "FeatureSequence" f
+    JOIN "DNASequence" d ON f."dnaSequenceId" = d.id
+    WHERE LENGTH(d.sequence) < ${maxLength}
+      AND f.type = ${FeatureEnum.CDS}
+      AND (
+        SELECT COUNT(*)
+        FROM "FeatureSequence" f2
+        WHERE f2."dnaSequenceId" = f."dnaSequenceId"
+          AND f2.type = ${FeatureEnum.CDS}
+      ) = 1
+  `;
+    return results;
   }
 }

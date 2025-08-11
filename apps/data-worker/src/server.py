@@ -1,5 +1,6 @@
 import os
 import sys
+from time import sleep
 
 from config import SHARED_DIR, STORAGE_DIR
 
@@ -27,6 +28,7 @@ class ExtractionService(data_pb2_grpc.ExtractionService):
 		request,
 		context: grpc.ServicerContext
 	):
+		counter = 0
 		try:
 			for item in extract_data(from_request(request)):
 				cds = [
@@ -45,6 +47,9 @@ class ExtractionService(data_pb2_grpc.ExtractionService):
 				)
 
 				yield response
+				counter += 1
+				if counter % 50000 == 0:
+					sleep(105)
 		except Exception as e:
 			context.set_code(grpc.StatusCode.INTERNAL)
 			context.set_details(f"Internal error: {str(e)}")

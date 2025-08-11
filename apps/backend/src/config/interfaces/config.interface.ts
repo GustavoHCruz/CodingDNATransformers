@@ -20,16 +20,37 @@ export interface FilesName {
 
 export interface DataExtraction {
   save_batch_len: number;
-  extraction_max_len: number;
 }
 
 export interface DatasetGeneration {
   batch_size: number;
 }
 
+export interface ExInClassifier {
+  gpt: number;
+  bert: number;
+  dnabert: number;
+}
+
+export interface TripletClassifier {
+  bert: number;
+  dnabert: number;
+}
+
+export interface DNATranslator {
+  gpt: number;
+}
+
+export interface DatasetLengths {
+  EXINCLASSIFIER: ExInClassifier;
+  TRIPLETCLASSIFIER: TripletClassifier;
+  DNATRANSLATOR: DNATranslator;
+}
+
 export interface ConfigYaml {
   paths: Paths;
   files_name: FilesName;
   data_extraction: DataExtraction;
+  datasets_lengths: DatasetLengths;
   dataset_generation: DatasetGeneration;
 }

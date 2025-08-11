@@ -1,4 +1,4 @@
-import { ApproachEnum, OriginEnum } from '@prisma/client';
+import { ApproachEnum, ModelTypeEnum, OriginEnum } from '@prisma/client';
 import { IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CreateParentDatasetDto {
@@ -7,6 +7,9 @@ export class CreateParentDatasetDto {
 
   @IsEnum(ApproachEnum)
   approach: ApproachEnum;
+
+  @IsEnum(ModelTypeEnum)
+  modelType: ModelTypeEnum;
 
   @IsEnum(OriginEnum)
   origin: OriginEnum;
