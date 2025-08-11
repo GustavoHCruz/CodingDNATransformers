@@ -18,7 +18,7 @@ export class DatasetGenerationController {
   @Post('/raw-datasets')
   async generateRawDatasets(
     @Body() data: CreateRawDatasetsDto,
-  ): Promise<CreateRawDatasetsDtoResponse[]> {
+  ): Promise<CreateRawDatasetsDtoResponse> {
     return this.datasetGenerationService.generateRawDatasets(data);
   }
 

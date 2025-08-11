@@ -2,7 +2,6 @@ import { ConfigModule } from '@config/config.module';
 import { ExtractionGrpcClientModule } from '@grpc/data-extraction/extraction.grpc-client.module';
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '@prisma/prisma.module';
-import { RedisModule } from '@redis/redis.module';
 import { ChildDatasetModule } from '@resources/child-dataset/child-dataset.module';
 import { ChildRecordModule } from '@resources/child-record/child-record.module';
 import { DataExtractionModule } from '@resources/data-extraction/data-extraction.module';
@@ -33,8 +32,6 @@ import { AppService } from './app.service';
     ProgressTrackerModule,
     TrainHistoryModule,
     RawFileInfoModule,
-    RedisModule,
-    //LlmModule,
   ],
   controllers: [AppController],
   providers: [AppService],

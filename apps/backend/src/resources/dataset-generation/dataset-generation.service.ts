@@ -152,9 +152,71 @@ export class DatasetGenerationService {
     return responses;
   }
 
+  async generateRawDatasetsExInFn(
+    approach: ApproachEnum,
+    modelType: ModelTypeEnum,
+    origin: OriginEnum,
+    maxLength: number,
+    batchSize: number,
+    taskId: number,
+  ) {
+    const parentDatasetId = (
+      await this.parentDatasetService.create({
+        approach,
+        modelType,
+        origin,
+        name: `${approach}-${modelType}`,
+      })
+    ).id;
+
+    let lastId: number | null = null;
+    let total = 0;
+    while (true) {
+      const batch = await this.FeatureSequenceService.findExIn(
+        maxLength,
+        batchSize,
+        lastId,
+      );
+
+      if (!batch.length) {
+        break;
+      }
+
+      await this.parentRecordService.createMany(
+        batch.map((record) => ({
+          parentDatasetId,
+          sequence: record.sequence,
+          target: record.type,
+          organism: record.organism,
+          gene: record.gene,
+          flankBefore: record.before,
+          flankAfter: record.after,
+        })),
+      );
+
+      lastId = batch[batchSize - 1].id;
+      total += batch.length;
+
+      await this.progressService.postProgress(taskId, total);
+    }
+    await this.parentDatasetService.update(parentDatasetId, {
+      recordCount: total,
+    });
+  }
+
   async generateRawDatasets(
     data: CreateRawDatasetsDto,
-  ): Promise<CreateRawDatasetsDtoResponse[]> {
+  ): Promise<CreateRawDatasetsDtoResponse> {
+    const response: CreateRawDatasetsDtoResponse = {
+      genbank: {
+        ExInClassifier: {},
+        TripletClassifier: {},
+        DNATranslator: {},
+      },
+    };
+
+    const batchSize = this.configService.getDatasetGeneration().batch_size;
+
     if (data.genbank?.ExInClassifier?.active) {
       const origin = OriginEnum.GENBANK;
       const approach = ApproachEnum.EXINCLASSIFIER;
@@ -162,84 +224,61 @@ export class DatasetGenerationService {
         const modelType = ModelTypeEnum.GPT;
         const maxLength =
           this.configService.getDatasetsLengths().EXINCLASSIFIER.gpt;
-        const parentDataset = await this.parentDatasetService.create({
+
+        const taskId = (
+          await this.progressService.create({
+            progressType: ProgressTypeEnum.COUNTER,
+          })
+        ).id;
+        this.generateRawDatasetsExInFn(
           approach,
           modelType,
           origin,
-          name: `${approach}-${modelType}`,
-        });
-
-        const exin = await this.FeatureSequenceService.findExIn(maxLength);
-
-        await this.parentRecordService.createMany(
-          exin.map((record) => ({
-            parentDatasetId: parentDataset.id,
-            sequence: record.sequence,
-            target: record.type,
-            organism: record.organism,
-            gene: record.gene,
-            flankBefore: record.before,
-            flankAfter: record.after,
-          })),
+          maxLength,
+          batchSize,
+          taskId,
         );
-
-        await this.parentDatasetService.update(parentDataset.id, {
-          recordCount: exin.length,
-        });
+        response.genbank.ExInClassifier!.gpt = taskId;
       }
       if (data.genbank.ExInClassifier.bert) {
         const modelType = ModelTypeEnum.BERT;
         const maxLength =
           this.configService.getDatasetsLengths().EXINCLASSIFIER.bert;
-        const parentDataset = await this.parentDatasetService.create({
+
+        const taskId = (
+          await this.progressService.create({
+            progressType: ProgressTypeEnum.COUNTER,
+          })
+        ).id;
+        this.generateRawDatasetsExInFn(
           approach,
           modelType,
           origin,
-          name: `${approach}-${modelType}`,
-        });
-
-        const exin = await this.FeatureSequenceService.findExIn(maxLength);
-
-        await this.parentRecordService.createMany(
-          exin.map((record) => ({
-            parentDatasetId: parentDataset.id,
-            sequence: record.sequence,
-            target: record.type,
-            organism: record.organism,
-            gene: record.gene,
-            flankBefore: record.before,
-            flankAfter: record.after,
-          })),
+          maxLength,
+          batchSize,
+          taskId,
         );
-
-        await this.parentDatasetService.update(parentDataset.id, {
-          recordCount: exin.length,
-        });
+        response.genbank.ExInClassifier!.bert = taskId;
       }
       if (data.genbank.ExInClassifier.dnabert) {
         const modelType = ModelTypeEnum.DNABERT;
         const maxLength =
           this.configService.getDatasetsLengths().EXINCLASSIFIER.dnabert;
-        const parentDataset = await this.parentDatasetService.create({
+
+        const taskId = (
+          await this.progressService.create({
+            progressType: ProgressTypeEnum.COUNTER,
+          })
+        ).id;
+        this.generateRawDatasetsExInFn(
           approach,
           modelType,
           origin,
-          name: `${approach}-${modelType}`,
-        });
-
-        const exin = await this.FeatureSequenceService.findExIn(maxLength);
-
-        await this.parentRecordService.createMany(
-          exin.map((record) => ({
-            parentDatasetId: parentDataset.id,
-            sequence: record.sequence,
-            target: record.type,
-          })),
+          maxLength,
+          batchSize,
+          taskId,
         );
-
-        await this.parentDatasetService.update(parentDataset.id, {
-          recordCount: exin.length,
-        });
+        response.genbank.ExInClassifier!.dnabert = taskId;
       }
     }
     if (data.genbank?.TripletClassifier?.active) {
@@ -252,6 +291,6 @@ export class DatasetGenerationService {
       if (data.genbank.DNATranslator.gpt) {
       }
     }
-    return [];
+    return response;
   }
 }
