@@ -25,8 +25,8 @@ export class FeatureSequenceService {
     return this.repository.remove(id);
   }
 
-  findExIn(maxLength: number) {
-    return this.repository.findExIn(maxLength);
+  findExIn(maxLength: number, limit: number, lastId: number | null) {
+    return this.repository.findExIn(maxLength, limit, lastId);
   }
 
   findCds(maxLength: number) {

@@ -30,9 +30,10 @@ export class FeatureSequenceRepository {
     return this.prisma.featureSequence.delete({ where: { id } });
   }
 
-  async findExIn(maxLength: number) {
+  async findExIn(maxLength: number, limit: number, lastId: number | null) {
     const results = await this.prisma.$queryRaw<
       {
+        id: number;
         sequence: string;
         gene: string;
         before: string;
@@ -42,6 +43,7 @@ export class FeatureSequenceRepository {
       }[]
     >`
 SELECT
+  f.id
   f.sequence,
   f.gene,
   f.before,
@@ -52,6 +54,9 @@ FROM "FeatureSequence" f
 JOIN "DNASequence" d ON f."dnaSequenceId" = d.id
 WHERE LENGTH(f.sequence) < ${maxLength}
   AND f.type in (${FeatureEnum.EXON},${FeatureEnum.INTRON})
+  ${lastId !== null ? Prisma.sql`AND f.id > ${lastId}` : Prisma.empty}
+  ORDER BY f.id
+  LIMIT ${limit}
 `;
     return results;
   }
