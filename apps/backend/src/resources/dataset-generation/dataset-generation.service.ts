@@ -2,6 +2,7 @@ import { ConfigService } from '@config/config.service';
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import {
   ApproachEnum,
+  FeatureEnum,
   ModelTypeEnum,
   OriginEnum,
   ProgressTypeEnum,
@@ -187,14 +188,14 @@ export class DatasetGenerationService {
           parentDatasetId,
           sequence: record.sequence,
           target: record.type,
-          organism: record.organism,
-          gene: record.gene,
-          flankBefore: record.before,
-          flankAfter: record.after,
+          organism: record.dnaSequence?.organism || '',
+          gene: record.gene || '',
+          flankBefore: record.before || '',
+          flankAfter: record.after || '',
         })),
       );
 
-      lastId = batch[batchSize - 1].id;
+      lastId = batch[batch.length - 1].id;
       total += batch.length;
 
       await this.progressService.postProgress(taskId, total);
@@ -202,6 +203,72 @@ export class DatasetGenerationService {
     await this.parentDatasetService.update(parentDatasetId, {
       recordCount: total,
     });
+    await this.progressService.finish(taskId);
+  }
+
+  async generateRawDatasetsTripletFn(
+    approach: ApproachEnum,
+    modelType: ModelTypeEnum,
+    origin: OriginEnum,
+    maxLength: number,
+    batchSize: number,
+    taskId: number,
+  ) {
+    const parentDatasetId = (
+      await this.parentDatasetService.create({
+        approach,
+        modelType,
+        origin,
+        name: `${approach}-${modelType}`,
+      })
+    ).id;
+
+    let lastId: number | null = null;
+    let total = 0;
+    while (true) {
+      const batch = await this.DNASequences.findTriplet(
+        maxLength,
+        batchSize,
+        lastId,
+      );
+
+      if (!batch.length) {
+        break;
+      }
+
+      await this.parentRecordService.createMany(
+        batch.map((record) => {
+          const splicingSeq = Array(record.sequence.length).fill('U');
+
+          for (const feat of record.features) {
+            const start = feat.start;
+            const end = feat.end;
+            const char = feat.type === FeatureEnum.INTRON ? 'I' : 'E';
+            splicingSeq.fill(char, start, end);
+          }
+
+          const target = splicingSeq.join('');
+
+          return {
+            parentDatasetId,
+            sequence: record.sequence,
+            target,
+            organism: record.organism || '',
+            flankBefore: record.before || '',
+            flankAfter: record.after || '',
+          };
+        }),
+      );
+
+      lastId = batch[batch.length - 1].id;
+      total += batch.length;
+
+      await this.progressService.postProgress(taskId, total);
+    }
+    await this.parentDatasetService.update(parentDatasetId, {
+      recordCount: total,
+    });
+    await this.progressService.finish(taskId);
   }
 
   async generateRawDatasets(

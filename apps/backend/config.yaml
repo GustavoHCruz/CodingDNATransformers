@@ -19,8 +19,8 @@ datasets_lengths:
     bert: 256
     dnabert: 256
   TRIPLETCLASSIFIER:
-    bert: 256
-    dnabert: 256
+    bert: 2048
+    dnabert: 2048
   DNATRANSLATOR:
     gpt: 512
 

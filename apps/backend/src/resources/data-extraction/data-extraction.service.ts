@@ -60,13 +60,30 @@ export class DataExtractionService {
 
         for (const item of records) {
           const { cds, exin, ...dna } = item;
-          const dnaSequenceId = (await this.dnaSequenceService.create(dna)).id;
+          const dnaSequenceId = (
+            await this.dnaSequenceService.create({
+              ...dna,
+              length: dna.sequence.length,
+            })
+          ).id;
 
           if (cds?.length) {
-            cdsAll.push(...cds.map((e) => ({ ...e, dnaSequenceId })));
+            cdsAll.push(
+              ...cds.map((e) => ({
+                ...e,
+                dnaSequenceId,
+                length: e.sequence.length,
+              })),
+            );
           }
           if (exin?.length) {
-            exinAll.push(...exin.map((e) => ({ ...e, dnaSequenceId })));
+            exinAll.push(
+              ...exin.map((e) => ({
+                ...e,
+                dnaSequenceId,
+                length: e.sequence.length,
+              })),
+            );
           }
         }
 

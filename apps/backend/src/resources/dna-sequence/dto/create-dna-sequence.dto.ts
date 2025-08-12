@@ -1,9 +1,12 @@
 import { CreateFeatureSequenceDto } from '@resources/feature-sequence/dto/create-feature-sequence.dto';
-import { IsOptional, IsString } from 'class-validator';
+import { IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CreateDnaSequenceDto {
   @IsString()
   sequence: string;
+
+  @IsNumber()
+  length: number;
 
   @IsOptional()
   @IsString()
