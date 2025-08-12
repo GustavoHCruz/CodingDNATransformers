@@ -31,33 +31,27 @@ export class FeatureSequenceRepository {
   }
 
   async findExIn(maxLength: number, limit: number, lastId: number | null) {
-    const results = await this.prisma.$queryRawUnsafe<
-      {
-        id: number;
-        sequence: string;
-        gene: string;
-        before: string;
-        after: string;
-        type: string;
-        organism: string;
-      }[]
-    >(`
-SELECT
-  f.id,
-  f.sequence,
-  f.gene,
-  f.before,
-  f.after,
-  f.type,
-  d.organism
-FROM "FeatureSequence" f
-JOIN "DNASequence" d ON f."dnaSequenceId" = d.id
-WHERE LENGTH(f.sequence) < ${maxLength}
-  AND f.type in ('${FeatureEnum.EXON}','${FeatureEnum.INTRON}')
-  ${lastId !== null ? `AND f.id > ${lastId}` : ``}
-  ORDER BY f.id
-  LIMIT ${limit}
-`);
+    const results = await this.prisma.featureSequence.findMany({
+      where: {
+        length: { lt: maxLength },
+        type: { in: [FeatureEnum.EXON, FeatureEnum.INTRON] },
+        ...(lastId !== null && { id: { gt: lastId } }),
+      },
+      select: {
+        id: true,
+        sequence: true,
+        gene: true,
+        before: true,
+        after: true,
+        type: true,
+        dnaSequence: {
+          select: { organism: true },
+        },
+      },
+      orderBy: { id: 'asc' },
+      take: limit,
+    });
+
     return results;
   }
 

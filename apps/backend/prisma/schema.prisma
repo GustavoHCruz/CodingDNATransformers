@@ -91,6 +91,7 @@ model RawFileInfo {
 model DNASequence {
   id        Int      @id @default(autoincrement())
   sequence  String
+  length    Int
   accession String?
   organism  String?
   createdAt DateTime @default(now())
@@ -108,6 +109,7 @@ enum FeatureEnum {
 model FeatureSequence {
   id       Int         @id @default(autoincrement())
   sequence String
+  length   Int
   type     FeatureEnum
   start    Int
   end      Int

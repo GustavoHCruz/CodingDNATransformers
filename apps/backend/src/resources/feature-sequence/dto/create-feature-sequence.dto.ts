@@ -5,6 +5,9 @@ export class CreateFeatureSequenceDto {
   @IsString()
   sequence: string;
 
+  @IsNumber()
+  length: number;
+
   @IsEnum(FeatureEnum)
   type: FeatureEnum;
 
