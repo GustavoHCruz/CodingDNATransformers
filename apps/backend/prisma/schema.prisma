@@ -37,18 +37,14 @@ model ProgressTracker {
 
 enum ApproachEnum {
   EXINCLASSIFIER
-  EXINTRANSLATOR
-  SLIDINGWINDOWEXTRACTION
-  PROTEINTRANSLATOR
+  TRIPLETCLASSIFIER
+  DNATRANSLATOR
 }
 
-model RawFileInfo {
-  id           Int          @id @default(autoincrement())
-  fileName     String
-  approach     ApproachEnum
-  totalRecords Int
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+enum ModelTypeEnum {
+  GPT
+  BERT
+  DNABERT
 }
 
 enum OriginEnum {
@@ -57,13 +53,14 @@ enum OriginEnum {
 }
 
 model ParentDataset {
-  id          Int          @id @default(autoincrement())
+  id          Int           @id @default(autoincrement())
   name        String
   approach    ApproachEnum
+  modelType   ModelTypeEnum
   origin      OriginEnum
-  recordCount Int?         @default(0)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  recordCount Int?          @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
   records ParentRecord[]
 }
@@ -82,6 +79,49 @@ model ParentRecord {
   ChildRecord     ChildRecord[]
 }
 
+model RawFileInfo {
+  id           Int        @id @default(autoincrement())
+  fileName     String
+  origin       OriginEnum
+  totalRecords Int
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model DNASequence {
+  id        Int      @id @default(autoincrement())
+  sequence  String
+  length    Int
+  accession String?
+  organism  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  features FeatureSequence[]
+}
+
+enum FeatureEnum {
+  EXON
+  INTRON
+  CDS
+}
+
+model FeatureSequence {
+  id       Int         @id @default(autoincrement())
+  sequence String
+  length   Int
+  type     FeatureEnum
+  start    Int
+  end      Int
+  gene     String?
+  strand   Int?
+  before   String?
+  after    String?
+
+  dnaSequenceId Int
+  dnaSequence   DNASequence? @relation(fields: [dnaSequenceId], references: [id])
+}
+
 model GenerationBatch {
   id        Int      @id @default(autoincrement())
   name      String
@@ -92,17 +132,20 @@ model GenerationBatch {
 }
 
 model ChildDataset {
-  id          Int          @id @default(autoincrement())
-  name        String       @unique
+  id          Int           @id @default(autoincrement())
+  name        String
   approach    ApproachEnum
+  modelType   ModelTypeEnum
   recordCount Int?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
   batchId         Int
   GenerationBatch GenerationBatch? @relation(fields: [batchId], references: [id], onDelete: Cascade)
 
-  records ChildRecord[]
+  records      ChildRecord[]
+  trainHistory TrainHistory[] @relation(name: "trainDataset")
+  evalHistory  TrainHistory[] @relation(name: "evalDataset")
 }
 
 model ChildRecord {
@@ -116,20 +159,12 @@ model ChildRecord {
 }
 
 model ModelHistory {
-  id           Int          @id @default(autoincrement())
-  name         String
-  approach     ApproachEnum
-  modelName    String
-  path         String
-  seed         Int
-  epochs       Int
-  learningRate Float
-  batchSize    Int
-  accuracy     Float
-  durationSec  Int
-  hideProp     Float?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  id             Int          @id @default(autoincrement())
+  modelAlias     String
+  checkpointName String
+  approach       ApproachEnum
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   parentId Int?
   parent   ModelHistory?  @relation("ModelParentChild", fields: [parentId], references: [id])
@@ -140,15 +175,28 @@ model ModelHistory {
 }
 
 model TrainHistory {
-  id          Int      @id @default(autoincrement())
-  epoch       Int
-  loss        Float
-  durationSec Int
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                   Int      @id @default(autoincrement())
+  learningRate         Int
+  batchSize            Int
+  gradientAccumulation Int
+  warmupRatio          Float
+  epochs               Int
+  hideProb             Float?
+  lora                 Boolean  @default(false)
+  loss                 Float
+  durationSec          Int
+  seed                 Int
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   modelId Int
   model   ModelHistory? @relation(fields: [modelId], references: [id], onDelete: Cascade)
+
+  trainDatasetId Int?
+  trainDataset   ChildDataset? @relation(name: "trainDataset", fields: [trainDatasetId], references: [id], onDelete: SetNull)
+
+  evalDatasetId Int?
+  evalDataset   ChildDataset? @relation(name: "evalDataset", fields: [evalDatasetId], references: [id], onDelete: SetNull)
 }
 
 model EvalHistory {
