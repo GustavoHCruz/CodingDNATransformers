@@ -9,6 +9,7 @@ import {
 } from '@prisma/client';
 import { ChildDatasetService } from '@resources/child-dataset/child-dataset.service';
 import { ChildRecordService } from '@resources/child-record/child-record.service';
+import { DnaSequenceService } from '@resources/dna-sequence/dna-sequence.service';
 import { FeatureSequenceService } from '@resources/feature-sequence/feature-sequence.service';
 import { GenerationBatchService } from '@resources/generation-batch/generation-batch.service';
 import { ParentDatasetService } from '@resources/parent-dataset/parent-dataset.service';
@@ -34,6 +35,7 @@ export class DatasetGenerationService {
     private readonly parentRecordService: ParentRecordService,
     private readonly parentDatasetService: ParentDatasetService,
     private readonly FeatureSequenceService: FeatureSequenceService,
+    private readonly DNASequenceService: DnaSequenceService,
   ) {}
 
   private async backgroundChildDatasetCreation(
@@ -195,7 +197,7 @@ export class DatasetGenerationService {
         })),
       );
 
-      lastId = batch[batch.length - 1].id;
+      lastId = batch.length > 0 ? batch[batch.length - 1].id : null;
       total += batch.length;
 
       await this.progressService.postProgress(taskId, total);
@@ -226,7 +228,7 @@ export class DatasetGenerationService {
     let lastId: number | null = null;
     let total = 0;
     while (true) {
-      const batch = await this.DNASequences.findTriplet(
+      const batch = await this.DNASequenceService.findTriplet(
         maxLength,
         batchSize,
         lastId,
@@ -254,8 +256,6 @@ export class DatasetGenerationService {
             sequence: record.sequence,
             target,
             organism: record.organism || '',
-            flankBefore: record.before || '',
-            flankAfter: record.after || '',
           };
         }),
       );

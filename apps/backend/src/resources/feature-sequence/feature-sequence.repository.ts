@@ -54,36 +54,4 @@ export class FeatureSequenceRepository {
 
     return results;
   }
-
-  async findCDS(maxLength: number) {
-    const results = await this.prisma.$queryRaw<
-      {
-        sequence: string;
-        protein: string;
-        gene: string;
-        before: string;
-        after: string;
-        organism: string;
-      }[]
-    >`
-    SELECT
-      d.sequence as sequence,
-      f.sequence as protein,
-      f.gene as gene,
-      f.before as before,
-      f.after as after,
-      d.organism as organism
-    FROM "FeatureSequence" f
-    JOIN "DNASequence" d ON f."dnaSequenceId" = d.id
-    WHERE LENGTH(d.sequence) < ${maxLength}
-      AND f.type = ${FeatureEnum.CDS}
-      AND (
-        SELECT COUNT(*)
-        FROM "FeatureSequence" f2
-        WHERE f2."dnaSequenceId" = f."dnaSequenceId"
-          AND f2.type = ${FeatureEnum.CDS}
-      ) = 1
-  `;
-    return results;
-  }
 }
