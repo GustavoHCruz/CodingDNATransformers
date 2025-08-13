@@ -31,4 +31,12 @@ export class DnaSequenceService {
   remove(id: number) {
     return this.repository.remove(id);
   }
+
+  findTriplet(maxLength: number, limit: number, lastId: number | null) {
+    return this.repository.findTriplet(maxLength, limit, lastId);
+  }
+
+  findCDS(maxLength: number, limit: number, lastId: number | null) {
+    return this.repository.findCDS(maxLength, limit, lastId);
+  }
 }

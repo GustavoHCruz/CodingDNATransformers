@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { FeatureEnum, Prisma } from '@prisma/client';
 import { PrismaService } from '@prisma/prisma.service';
 
 @Injectable()
@@ -50,12 +50,64 @@ export class DnaSequenceRepository {
     return this.prisma.dNASequence.delete({ where: { id } });
   }
 
-  findExIn(offset, limit, max_length=512) {
-    return this.prisma.dNASequence.findMany({
-      
+  async findTriplet(maxLength: number, limit: number, lastId: number | null) {
+    const results = await this.prisma.dNASequence.findMany({
       where: {
+        length: { lt: maxLength },
+        ...(lastId !== null && { id: { gt: lastId } }),
+      },
+      select: {
+        id: true,
+        sequence: true,
+        organism: true,
+        length: true,
+        features: {
+          where: {
+            type: {
+              in: [FeatureEnum.INTRON, FeatureEnum.EXON],
+            },
+          },
+          select: {
+            type: true,
+            start: true,
+            end: true,
+          },
+        },
+      },
+      orderBy: { id: 'asc' },
+      take: limit,
+    });
 
-      }
-    })
+    return results;
+  }
+
+  async findCDS(maxLength: number, limit: number, lastId: number | null) {
+    const results = await this.prisma.$queryRawUnsafe<{
+      sequence: string;
+      target: string;
+      organism: string;
+    }>(`
+      SELECT
+        d.sequence AS sequence,
+        f.sequence AS target,
+        d.organism AS organism,
+        d.id AS id
+      FROM "DNASequence" d
+      INNER JOIN "FeatureSequence" f 
+        ON f."dnaSequenceId" = d.id
+        AND f.type = ${FeatureEnum.CDS}
+      WHERE d.length < ${maxLength}
+        AND (
+          SELECT COUNT(*)
+          FROM "FeatureSequence" f2
+          WHERE f2."dnaSequenceId" = d.id
+            AND f2.type = ${FeatureEnum.CDS}
+        ) = 1
+        ${lastId ? `AND d.id > ${lastId}` : ''}
+      ORDER BY d.id ASC
+      LIMIT ${limit};
+    `);
+
+    return results;
   }
 }
