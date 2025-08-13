@@ -185,7 +185,7 @@ export class DatasetGenerationService {
         break;
       }
 
-      await this.parentRecordService.createMany(
+      const result = await this.parentRecordService.createMany(
         batch.map((record) => ({
           parentDatasetId,
           sequence: record.sequence,
@@ -198,7 +198,7 @@ export class DatasetGenerationService {
       );
 
       lastId = batch.length > 0 ? batch[batch.length - 1].id : null;
-      total += batch.length;
+      total += result.count;
 
       await this.progressService.postProgress(taskId, total);
     }
@@ -238,7 +238,7 @@ export class DatasetGenerationService {
         break;
       }
 
-      await this.parentRecordService.createMany(
+      const result = await this.parentRecordService.createMany(
         batch.map((record) => {
           const splicingSeq = Array(record.sequence.length).fill('U');
 
@@ -261,7 +261,59 @@ export class DatasetGenerationService {
       );
 
       lastId = batch[batch.length - 1].id;
-      total += batch.length;
+      total += result.count;
+
+      await this.progressService.postProgress(taskId, total);
+    }
+    await this.parentDatasetService.update(parentDatasetId, {
+      recordCount: total,
+    });
+    await this.progressService.finish(taskId);
+  }
+
+  async generateRawDatasetsDNATranslatorFn(
+    approach: ApproachEnum,
+    modelType: ModelTypeEnum,
+    origin: OriginEnum,
+    maxLength: number,
+    batchSize: number,
+    taskId: number,
+  ) {
+    const parentDatasetId = (
+      await this.parentDatasetService.create({
+        approach,
+        modelType,
+        origin,
+        name: `${approach}-${modelType}`,
+      })
+    ).id;
+
+    let lastId: number | null = null;
+    let total = 0;
+    while (true) {
+      const batch = await this.DNASequenceService.findCDS(
+        maxLength,
+        batchSize,
+        lastId,
+      );
+
+      if (!batch.length) {
+        break;
+      }
+
+      const result = await this.parentRecordService.createMany(
+        batch.map((record) => {
+          return {
+            parentDatasetId,
+            sequence: record.sequence,
+            target: record.features[0]!.sequence,
+            organism: record.organism || '',
+          };
+        }),
+      );
+
+      lastId = batch[batch.length - 1].id;
+      total += result.count;
 
       await this.progressService.postProgress(taskId, total);
     }
@@ -284,8 +336,8 @@ export class DatasetGenerationService {
 
     const batchSize = this.configService.getDatasetGeneration().batch_size;
 
+    const origin = OriginEnum.GENBANK;
     if (data.genbank?.ExInClassifier?.active) {
-      const origin = OriginEnum.GENBANK;
       const approach = ApproachEnum.EXINCLASSIFIER;
       if (data.genbank.ExInClassifier.gpt) {
         const modelType = ModelTypeEnum.GPT;
@@ -349,13 +401,69 @@ export class DatasetGenerationService {
       }
     }
     if (data.genbank?.TripletClassifier?.active) {
+      const approach = ApproachEnum.TRIPLETCLASSIFIER;
       if (data.genbank.TripletClassifier.bert) {
+        const modelType = ModelTypeEnum.BERT;
+        const maxLength =
+          this.configService.getDatasetsLengths().TRIPLETCLASSIFIER.bert;
+
+        const taskId = (
+          await this.progressService.create({
+            progressType: ProgressTypeEnum.COUNTER,
+          })
+        ).id;
+        this.generateRawDatasetsTripletFn(
+          approach,
+          modelType,
+          origin,
+          maxLength,
+          batchSize,
+          taskId,
+        );
+        response.genbank.TripletClassifier!.bert = taskId;
       }
       if (data.genbank.TripletClassifier.dnabert) {
+        const modelType = ModelTypeEnum.DNABERT;
+        const maxLength =
+          this.configService.getDatasetsLengths().TRIPLETCLASSIFIER.dnabert;
+
+        const taskId = (
+          await this.progressService.create({
+            progressType: ProgressTypeEnum.COUNTER,
+          })
+        ).id;
+        this.generateRawDatasetsTripletFn(
+          approach,
+          modelType,
+          origin,
+          maxLength,
+          batchSize,
+          taskId,
+        );
+        response.genbank.TripletClassifier!.dnabert = taskId;
       }
     }
     if (data.genbank?.DNATranslator?.active) {
+      const approach = ApproachEnum.DNATRANSLATOR;
       if (data.genbank.DNATranslator.gpt) {
+        const modelType = ModelTypeEnum.GPT;
+        const maxLength =
+          this.configService.getDatasetsLengths().DNATRANSLATOR.gpt;
+
+        const taskId = (
+          await this.progressService.create({
+            progressType: ProgressTypeEnum.COUNTER,
+          })
+        ).id;
+        this.generateRawDatasetsDNATranslatorFn(
+          approach,
+          modelType,
+          origin,
+          maxLength,
+          batchSize,
+          taskId,
+        );
+        response.genbank.DNATranslator!.gpt = taskId;
       }
     }
     return response;

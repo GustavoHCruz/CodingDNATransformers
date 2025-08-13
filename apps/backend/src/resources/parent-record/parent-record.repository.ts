@@ -105,7 +105,7 @@ export class ParentRecordRepository {
   }
 
   createMany(data: Prisma.ParentRecordCreateManyInput[]) {
-    return this.prisma.parentRecord.createMany({ data });
+    return this.prisma.parentRecord.createMany({ data, skipDuplicates: true });
   }
 
   update(id: number, data: Prisma.ParentRecordUpdateInput) {

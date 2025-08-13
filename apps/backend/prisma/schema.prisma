@@ -69,14 +69,16 @@ model ParentRecord {
   id          Int     @id @default(autoincrement())
   sequence    String
   target      String
-  flankBefore String?
-  flankAfter  String?
-  organism    String?
-  gene        String?
+  flankBefore String? @default("")
+  flankAfter  String? @default("")
+  organism    String? @default("")
+  gene        String? @default("")
 
   parentDatasetId Int
   parentDataset   ParentDataset? @relation(fields: [parentDatasetId], references: [id], onDelete: Cascade)
   ChildRecord     ChildRecord[]
+
+  @@unique([sequence, target, flankBefore, flankAfter, organism, gene, parentDatasetId])
 }
 
 model RawFileInfo {
