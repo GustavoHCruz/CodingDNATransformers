@@ -72,4 +72,8 @@ export class ParentRecordService {
   countByApproach(approach: ApproachEnum) {
     return this.repository.countByApproach(approach);
   }
+
+  get(parentId: number) {
+    return this.repository.get(parentId);
+  }
 }

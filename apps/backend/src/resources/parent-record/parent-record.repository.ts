@@ -125,4 +125,20 @@ export class ParentRecordRepository {
       },
     });
   }
+
+  get(parentId: number) {
+    return this.prisma.parentRecord.findMany({
+      where: {
+        parentDatasetId: parentId,
+      },
+      select: {
+        sequence: true,
+        target: true,
+        organism: true,
+        gene: true,
+        flankBefore: true,
+        flankAfter: true,
+      },
+    });
+  }
 }

@@ -1,5 +1,4 @@
 import { Controller, Post } from '@nestjs/common';
-import { v4 as uuidv4 } from 'uuid';
 import { CreateModelDto } from './dto/createModel.dto';
 import { LlmService } from './llm.service';
 
@@ -8,9 +7,12 @@ export class LlmController {
   constructor(private readonly llmService: LlmService) {}
 
   @Post()
-  createModel(data: CreateModelDto) {
-    this.llmService.generateCsvFromChildDataset(uuidv4(), 4);
-    this.llmService.generateCsvFromChildDataset(uuidv4(), 5);
+  async createModel(data: CreateModelDto) {
+    //await this.llmService.generateCsvFromChildDataset('ExIn-GPT', 4);
+    //await this.llmService.generateCsvFromChildDataset('ExIn-BERT', 5);
+    //await this.llmService.generateCsvFromChildDataset('ExIn-DNABERT', 6);
+    //await this.llmService.generateCsvFromChildDataset('Triplet-BERT', 10);
+    await this.llmService.generateCsvFromChildDataset('Triplet-DNABERT', 11);
     return true;
   }
 }
