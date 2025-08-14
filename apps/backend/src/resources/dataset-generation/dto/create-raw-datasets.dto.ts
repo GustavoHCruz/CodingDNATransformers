@@ -38,6 +38,9 @@ class DNATranslator {
 
   @IsBoolean()
   gpt: boolean = false;
+
+  @IsBoolean()
+  alternative: boolean = false;
 }
 
 class ExInClassifierResponse {
@@ -68,6 +71,10 @@ class DNATranslatorResponse {
   @IsNumber()
   @IsOptional()
   gpt?: number;
+
+  @IsNumber()
+  @IsOptional()
+  alternative?: number;
 }
 
 class Approach {

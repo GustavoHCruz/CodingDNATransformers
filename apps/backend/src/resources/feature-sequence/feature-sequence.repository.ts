@@ -54,4 +54,62 @@ export class FeatureSequenceRepository {
 
     return results;
   }
+
+  async findCDS(maxLength: number, limit: number, lastId: number | null) {
+    const results = await this.prisma.featureSequence.findMany({
+      select: {
+        id: true,
+        sequence: true,
+        dnaSequence: {
+          select: {
+            sequence: true,
+            organism: true,
+          },
+        },
+      },
+      where: {
+        type: {
+          equals: FeatureEnum.CDS,
+        },
+        id: lastId ? { gt: lastId } : undefined,
+        dnaSequence: {
+          length: { lt: maxLength },
+        },
+      },
+      orderBy: { id: 'asc' },
+      take: limit,
+    });
+
+    return results;
+  }
+
+  async findCDSWithoutIntrons(limit: number, lastId: number | null) {
+    const results = await this.prisma.featureSequence.findMany({
+      select: {
+        id: true,
+        sequence: true,
+        start: true,
+        end: true,
+        dnaSequence: {
+          select: {
+            sequence: true,
+            organism: true,
+          },
+        },
+      },
+      where: {
+        length: {
+          lte: 880,
+        },
+        type: {
+          equals: FeatureEnum.CDS,
+        },
+        id: lastId ? { gt: lastId } : undefined,
+      },
+      orderBy: { id: 'asc' },
+      take: limit,
+    });
+
+    return results;
+  }
 }

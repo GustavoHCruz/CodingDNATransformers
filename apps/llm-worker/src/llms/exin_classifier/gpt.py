@@ -3,61 +3,183 @@ import os
 import random
 import sys
 import time
-import tokenize
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from math import ceil
-from typing import Any, Generator
+from typing import Any, Generator, Literal, cast
 
 import torch
 from accelerate import Accelerator
 from config import SHARED_DIR, STORAGE_DIR
-from redis_service import (CreateField, EvalField, ProcessingStatus,
-                           TrainField, redis_service)
 from torch.nn.utils.rnn import pad_sequence
 from torch.optim import AdamW
 from torch.utils.data import DataLoader, IterableDataset
+from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers.models.gpt2 import GPT2LMHeadModel, GPT2Tokenizer
 from transformers.optimization import get_scheduler
 from utils import load_model, save_model, set_seed
+from schemas import TrainParams
 
+class ExInClassifierGPT():
+	model: GPT2LMHeadModel | None = None
+	tokenizer: GPT2Tokenizer | None = None
+	max_length = 512
 
-def process_sequence(sequence) -> str:
-	return f"".join(f"[{nucl.upper()}]" for nucl in sequence)
+	def _load_tokenizer(
+		self,
+		checkpoint: str
+	) -> None:
+		tokenizer = GPT2Tokenizer.from_pretrained(checkpoint)
+		tokenizer.pad_token = tokenizer.eos_token
 
-def process_target(label) -> str:
-	return f"[{label.upper()}]"
+		special_tokens = ["[A]", "[C]", "[G]", "[T]", "[R]", "[Y]", "[S]", "[W]", "[K]", "[M]", "[B]", "[D]", "[H]", "[V]", "[N]", "[EXON]", "[INTRON]"]
+		tokenizer.add_tokens(special_tokens)
 
-def promptfy(
-	sequence: str,
-	organism: str,
-	hide_prob: float,
-	target: str,
-	gene: str | None,
-	flank_before: str | None,
-	flank_after: str | None,
-) -> tuple[str, str]:
-	output = f"<|SEQUENCE|>{sequence}\n"
+		tokenizer.add_special_tokens({
+			"additional_special_tokens": ["<|SEQUENCE|>", "<|ORGANISM|>", "<|GENE|>", "<|FLANK_BEFORE|>", "<|FLANK_AFTER|>", "<|TARGET|>"]
+		})
 
-	if organism:
-		if random.random() > hide_prob:
-			output += f"<|ORGANISM|>{organism[:10]}\n"
+		tokenizer.add_eos_token = True
 
-	if gene:
-		if random.random() > hide_prob:
-			output += f"<|GENE|>{gene[:10]}\n"
+		tokenizer.pad_token = tokenizer.eos_token
+
+	def _load_model(
+		self,
+		checkpoint: str
+	) -> None:
+		self.model = GPT2LMHeadModel.from_pretrained(checkpoint)
+		self._load_tokenizer(
+			checkpoint=checkpoint
+		)
+		if self.tokenizer is None:
+			return None
+		
+		self.model.resize_token_embeddings(len(self.tokenizer), mean_resizing=False)
+
+	def load_checkpoint(
+		self,
+		checkpoint: str
+	) -> None:
+		self._load_model(
+			checkpoint=checkpoint
+		)
+
+	def from_pretrained(
+		self,
+		checkpoint: str
+	) -> None:
+		self.model = GPT2LMHeadModel.from_pretrained(checkpoint)
+		self.tokenizer = GPT2Tokenizer.from_pretrained(checkpoint)
+
+	def _process_sequence(
+		self,
+		sequence: str
+	) -> str:
+		return f"".join(f"[{nucl.upper()}]" for nucl in sequence)
+
+	def _process_target(
+		self,
+		target: str
+	) -> str:
+		return f"[{target.upper()}]"
 	
-	if flank_before:
-		if random.random() > hide_prob:
-			output += f"<|FLANK_BEFORE|>{flank_before}\n"
-	
-	if flank_after:
-		if random.random() > hide_prob:
-			output += f"<|FLANK_AFTER|>{flank_after}\n"
-	
-	output += "<|TARGET|>"
+	def build_prompt(
+		self,
+		sequence: str,
+		target: str | None = None,
+		organism: str = '',
+		gene: str = '',
+		before: str = '',
+		after: str = '',
+		hide_prob: float = 0.1
+	) -> str:
+			output = f"<|SEQUENCE|>{sequence}\n"
 
-	return output, f"{output}{target}"
+			if organism:
+				if random.random() > hide_prob:
+					output += f"<|ORGANISM|>{organism[:10]}\n"
+
+			if gene:
+				if random.random() > hide_prob:
+					output += f"<|GENE|>{gene[:10]}\n"
+			
+			if before:
+				if random.random() > hide_prob:
+					output += f"<|FLANK_BEFORE|>{before}\n"
+			
+			if after:
+				if random.random() > hide_prob:
+					output += f"<|FLANK_AFTER|>{after}\n"
+			
+			output += "<|TARGET|>"
+
+			if target is None:
+				return output
+
+			return f"{output}{target}"
+
+	def _tokenize(
+		self,
+		prompt: str,
+		prompt_with_target: str
+	) -> dict[Literal["input_ids", "attention_mask", "labels"], torch.Tensor] | None:
+		if not self.tokenizer:
+			return None
+		
+		prompt_encoded = self.tokenizer(prompt)
+		prompt_with_target_encoded = self.tokenizer(
+			prompt_with_target,
+			truncation=True,
+			padding="max_length",
+			max_length=self.max_length
+		)
+
+		input_ids = prompt_with_target_encoded["input_ids"]
+		input_ids = cast(list, input_ids)
+		attention_mask = prompt_with_target_encoded["attention_mask"]
+
+		labels = [-100] * len(input_ids)
+		start = len(cast(list, prompt_encoded["input_ids"]))
+
+		for i in range(start, len(input_ids)):
+			if input_ids[i] != self.tokenizer.pad_token_id:
+				labels[i] = input_ids[i]
+		
+		return {
+			"input_ids": torch.tensor(input_ids, dtype=torch.long),
+			"attention_mask": torch.tensor(attention_mask, dtype=torch.bool),
+			"labels": torch.tensor(labels, dtype=torch.long)
+		}
+
+	def load_data(
+		self,
+		data: dict[Literal["sequence", "target", "organism", "gene", "before", "after"], list[str]],
+		hide_prob: float = 0.1
+	) -> None:
+		tokenized_data = []
+		for sequence, target, organism, gene, before, after in zip(data["sequence"], data["target"], data["organism"], data["gene"], data["before"], data["after"]):
+			partial, full = self._promptfy(
+				sequence=sequence,
+				target=target,
+				organism=organism,
+				gene=gene,
+				before=before,
+				after=after,
+				hide_prob=hide_prob
+			)
+
+			tokenized = self._tokenize(partial, full)
+
+			tokenized_data.append(tokenized)
+
+		self.data = tokenized_data
+	
+	def train(
+		self,
+		params: TrainParams
+	) -> None:
+		
 
 class DNADatasetFinetune(IterableDataset):
 		def __init__(
@@ -149,8 +271,6 @@ def create_model(
 	uuid: str,
 	is_child: bool = False
 ) -> None:
-	redis_service.set_create_info(uuid, CreateField.STATUS, ProcessingStatus.IN_PROGRESS)
-
 	if is_child:
 		parent_checkpoint = os.path.join(STORAGE_DIR, "models", name)
 		model = AutoModelForCausalLM.from_pretrained(
@@ -178,8 +298,6 @@ def create_model(
 	model.save_pretrained(output_path)
 	tokenizer.save_pretrained(output_path)
 
-	redis_service.set_create_info(uuid, CreateField.STATUS, ProcessingStatus.DONE)
-
 def train_model(
 	model_name: str,
 	uuid: str,
@@ -192,20 +310,11 @@ def train_model(
 	feat_hide_prob: float,
 	seed: int
 ) -> None:
-	redis_service.set_train_info(uuid, TrainField.STATUS, ProcessingStatus.IN_PROGRESS)
-
 	set_seed(seed)
 
 	accelerator = Accelerator()
 	is_main_process = accelerator.is_main_process
 	num_gpus = accelerator.num_processes
-
-	if is_main_process:
-		redis_service.set_train_info(
-			uuid=uuid,
-			field=TrainField.GPU_AMOUNT,
-			value=num_gpus
-		)
 
 	model, tokenizer = load_model(model_name)
 
@@ -246,13 +355,6 @@ def train_model(
 	num_update_steps_per_epoch = ceil(dataloader_len_local / gradient_accumulation)
 	max_train_steps = epochs * num_update_steps_per_epoch
 
-	if is_main_process:
-		redis_service.set_train_info(
-			uuid=uuid,
-			field=TrainField.TOTAL_STEPS,
-			value=max_train_steps
-		)
-
 	global_step = 0
 	model.train()
 	for epoch in range(epochs):
@@ -283,22 +385,6 @@ def train_model(
 				current_lr = lr_scheduler.get_last_lr()[0]
 
 				if is_main_process:
-					redis_service.set_train_info(
-						uuid=uuid,
-						field=TrainField.LOSS,
-						value=loss_val
-					)
-					redis_service.set_train_info(
-						uuid=uuid,
-						field=TrainField.LR,
-						value=current_lr
-					)
-					redis_service.set_train_info(
-						uuid=uuid,
-						field=TrainField.STEP,
-						value=global_step
-					)
-
 					history["epoch"].append(round(current_epoch_fraction, 2))
 					history["train_loss"].append(accumulated_loss)
 					history["lr"].append(current_lr)
@@ -315,11 +401,14 @@ def train_model(
 	accelerator.wait_for_everyone()
 	accelerator.end_training()
 
-	redis_service.set_train_info(
-		uuid=uuid,
-		field=TrainField.STATUS,
-		value=ProcessingStatus.DONE
-	)
+import os
+
+import torch
+from sklearn.metrics import (accuracy_score, f1_score, precision_score,
+                             recall_score)
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+
 
 def evaluate(
 	model_name: str,
@@ -328,8 +417,6 @@ def evaluate(
 	batch_size: int,
 	seed: int
 ):
-	redis_service.set_eval_info(uuid, EvalField.STATUS, ProcessingStatus.IN_PROGRESS)
-	
 	set_seed(seed)
 
 	model, tokenizer = load_model(model_name)
@@ -337,30 +424,49 @@ def evaluate(
 	data_path = os.path.join(SHARED_DIR, "temp", uuid)
 
 	dataset = DNADatasetFinetune(
-		csv_path=data_path+".csv",
+		csv_path=data_path + ".csv",
 		tokenizer=tokenizer,
 		dataset_total_length=data_length,
 		feat_hide_prob=0.0
 	)
 	dataloader = DataLoader(
-		dataset=dataset,
-		batch_size=batch_size,
-		collate_fn=FinetuneDataCollator(tokenizer)
+			dataset=dataset,
+			batch_size=batch_size,
+			collate_fn=FinetuneDataCollator(tokenizer)
 	)
 
 	model.to("cuda")
 
+	y_true = []
+	y_pred = []
+
 	model.eval()
 	with torch.no_grad():
-		for batch in dataloader:
-			input_ids, attention_mask, labels = [b.to(model.device) for b in batch]
-		
-			for i, a, l in zip(input_ids, attention_mask, labels):
-				prediction = model.generate(
-					input_ids=i,
-					attention_mask=a,
-					max_new_tokens=1,
-				)
+		for batch in tqdm(dataloader):
+			input_ids, attention_mask, label = [b.to(model.device) for b in batch.values()]
 
-				if prediction[0][-1] == labels[-1]:
-					
+			responses = model.generate(
+				input_ids=input_ids,
+				attention_mask=attention_mask,
+				max_new_tokens=1,
+				pad_token_id=tokenizer.eos_token_id
+			)
+
+			for r, l in zip(responses, label):
+				# Pegamos o token previsto (último token gerado)
+				pred_token = r[-1].item()
+				true_token = l[0].item()
+
+				y_pred.append(pred_token)
+				y_true.append(true_token)
+
+	# Calcula métricas
+	acc = accuracy_score(y_true, y_pred)
+	prec = precision_score(y_true, y_pred, average="weighted", zero_division=0)
+	rec = recall_score(y_true, y_pred, average="weighted", zero_division=0)
+	f1 = f1_score(y_true, y_pred, average="weighted", zero_division=0)
+
+	print(f"Accuracy:  {acc:.4f}")
+	print(f"Precision: {prec:.4f}")
+	print(f"Recall:    {rec:.4f}")
+	print(f"F1-score:  {f1:.4f}")

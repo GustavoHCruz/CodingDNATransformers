@@ -291,7 +291,7 @@ export class DatasetGenerationService {
     let lastId: number | null = null;
     let total = 0;
     while (true) {
-      const batch = await this.DNASequenceService.findCDS(
+      const batch = await this.FeatureSequenceService.findCDS(
         maxLength,
         batchSize,
         lastId,
@@ -305,11 +305,101 @@ export class DatasetGenerationService {
         batch.map((record) => {
           return {
             parentDatasetId,
-            sequence: record.sequence,
-            target: record.features[0]!.sequence,
-            organism: record.organism || '',
+            sequence: record.dnaSequence!.sequence,
+            target: record.sequence,
+            organism: record.dnaSequence!.organism || '',
           };
         }),
+      );
+
+      lastId = batch[batch.length - 1].id;
+      total += result.count;
+
+      await this.progressService.postProgress(taskId, total);
+    }
+    await this.parentDatasetService.update(parentDatasetId, {
+      recordCount: total,
+    });
+    await this.progressService.finish(taskId);
+  }
+
+  async generateRawDatasetsDNATranslatorWithoutIntronFn(
+    approach: ApproachEnum,
+    modelType: ModelTypeEnum,
+    origin: OriginEnum,
+    maxLength: number,
+    batchSize: number,
+    taskId: number,
+  ) {
+    const parentDatasetId = (
+      await this.parentDatasetService.create({
+        approach,
+        modelType,
+        origin,
+        name: `${approach}-${modelType}`,
+      })
+    ).id;
+
+    let lastId: number | null = null;
+    let total = 0;
+    while (true) {
+      const batch = await this.FeatureSequenceService.findCDSWithoutIntrons(
+        batchSize,
+        lastId,
+      );
+
+      if (!batch.length) {
+        break;
+      }
+
+      const provisory = batch.reduce(
+        (acc, record) => {
+          const length = record.end - record.start;
+          if (length < maxLength && record.dnaSequence) {
+            acc.push({
+              parentDatasetId,
+              sequence: record.dnaSequence.sequence.slice(
+                record.start,
+                record.end,
+              ),
+              target: record.sequence,
+              organism: record.dnaSequence.organism || '',
+            });
+          }
+          return acc;
+        },
+        [] as {
+          parentDatasetId: number;
+          sequence: string;
+          target: string;
+          organism: string;
+        }[],
+      );
+
+      const result = await this.parentRecordService.createMany(
+        batch.reduce(
+          (acc, record) => {
+            const length = record.end - record.start;
+            if (length < maxLength && record.dnaSequence) {
+              acc.push({
+                parentDatasetId,
+                sequence: record.dnaSequence.sequence.slice(
+                  record.start,
+                  record.end,
+                ),
+                target: record.sequence,
+                organism: record.dnaSequence.organism || '',
+              });
+            }
+            return acc;
+          },
+          [] as {
+            parentDatasetId: number;
+            sequence: string;
+            target: string;
+            organism: string;
+          }[],
+        ),
       );
 
       lastId = batch[batch.length - 1].id;
@@ -464,6 +554,26 @@ export class DatasetGenerationService {
           taskId,
         );
         response.genbank.DNATranslator!.gpt = taskId;
+      }
+      if (data.genbank.DNATranslator.alternative) {
+        const modelType = ModelTypeEnum.GPT;
+        const maxLength =
+          this.configService.getDatasetsLengths().DNATRANSLATOR.gpt;
+
+        const taskId = (
+          await this.progressService.create({
+            progressType: ProgressTypeEnum.COUNTER,
+          })
+        ).id;
+        this.generateRawDatasetsDNATranslatorWithoutIntronFn(
+          approach,
+          modelType,
+          origin,
+          maxLength,
+          batchSize,
+          taskId,
+        );
+        response.genbank.DNATranslator!.alternative = taskId;
       }
     }
     return response;

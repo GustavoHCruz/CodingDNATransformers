@@ -80,43 +80,4 @@ export class DnaSequenceRepository {
 
     return results;
   }
-
-  async findCDS(maxLength: number, limit: number, lastId: number | null) {
-    const grouped = await this.prisma.featureSequence.groupBy({
-      by: ['dnaSequenceId'],
-      where: {
-        type: FeatureEnum.CDS,
-        dnaSequence: {
-          length: { lt: maxLength },
-          id: lastId ? { gt: lastId } : undefined,
-        },
-      },
-      _count: { id: true },
-      having: {
-        id: { _count: { equals: 1 } },
-      },
-      orderBy: { dnaSequenceId: 'asc' },
-      take: limit,
-    });
-
-    const results = await this.prisma.dNASequence.findMany({
-      where: { id: { in: grouped.map((g) => g.dnaSequenceId) } },
-      select: {
-        id: true,
-        sequence: true,
-        organism: true,
-        features: {
-          select: {
-            sequence: true,
-          },
-          where: {
-            type: FeatureEnum.CDS,
-          },
-        },
-      },
-      orderBy: { id: 'asc' },
-    });
-
-    return results;
-  }
 }

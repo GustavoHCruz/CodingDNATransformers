@@ -35,8 +35,4 @@ export class DnaSequenceService {
   findTriplet(maxLength: number, limit: number, lastId: number | null) {
     return this.repository.findTriplet(maxLength, limit, lastId);
   }
-
-  findCDS(maxLength: number, limit: number, lastId: number | null) {
-    return this.repository.findCDS(maxLength, limit, lastId);
-  }
 }

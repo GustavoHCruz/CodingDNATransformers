@@ -28,4 +28,12 @@ export class FeatureSequenceService {
   findExIn(maxLength: number, limit: number, lastId: number | null) {
     return this.repository.findExIn(maxLength, limit, lastId);
   }
+
+  findCDS(maxLength: number, limit: number, lastId: number | null) {
+    return this.repository.findCDS(maxLength, limit, lastId);
+  }
+
+  async findCDSWithoutIntrons(limit: number, lastId: number | null) {
+    return this.repository.findCDSWithoutIntrons(limit, lastId);
+  }
 }
