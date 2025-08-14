@@ -22,11 +22,15 @@ export class ChildRecordService {
     return this.repository.findOne(id);
   }
 
-  streamFindAllByChildDatasetId(childDatasetId: number) {
-    return this.repository.streamFindAllByChildDatasetId(childDatasetId);
-  }
-
   remove(id: number) {
     return this.repository.remove(id);
+  }
+
+  findByChildIdPaginated(
+    childId: number,
+    cursorId?: number | null,
+    limit = 100,
+  ) {
+    return this.repository.findByChildIdPaginated(childId, cursorId, limit);
   }
 }

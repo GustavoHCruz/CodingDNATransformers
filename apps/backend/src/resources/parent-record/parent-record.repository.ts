@@ -126,18 +126,29 @@ export class ParentRecordRepository {
     });
   }
 
-  get(parentId: number) {
+  findByParentIdPaginated(
+    parentId: number,
+    cursorId?: number | null,
+    limit = 100,
+  ) {
     return this.prisma.parentRecord.findMany({
       where: {
         parentDatasetId: parentId,
       },
       select: {
+        id: true,
         sequence: true,
         target: true,
         organism: true,
         gene: true,
         flankBefore: true,
         flankAfter: true,
+      },
+      take: limit,
+      skip: cursorId ? 1 : 0,
+      cursor: cursorId ? { id: cursorId } : undefined,
+      orderBy: {
+        id: 'asc',
       },
     });
   }

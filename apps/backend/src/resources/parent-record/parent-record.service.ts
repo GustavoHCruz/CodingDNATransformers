@@ -73,7 +73,11 @@ export class ParentRecordService {
     return this.repository.countByApproach(approach);
   }
 
-  get(parentId: number) {
-    return this.repository.get(parentId);
+  findByParentIdPaginated(
+    parentId: number,
+    cursorId?: number | null,
+    limit = 100,
+  ) {
+    return this.repository.findByParentIdPaginated(parentId, cursorId, limit);
   }
 }

@@ -12,7 +12,8 @@ export class LlmController {
     //await this.llmService.generateCsvFromChildDataset('ExIn-BERT', 5);
     //await this.llmService.generateCsvFromChildDataset('ExIn-DNABERT', 6);
     //await this.llmService.generateCsvFromChildDataset('Triplet-BERT', 10);
-    await this.llmService.generateCsvFromChildDataset('Triplet-DNABERT', 11);
+    //await this.llmService.generateCsvFromChildDataset('Triplet-DNABERT', 11);
+    //await this.llmService.generateCsvFromChildDataset('DNATrans-GPT', 15);
     return true;
   }
 }
