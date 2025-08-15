@@ -33,12 +33,19 @@ class SWExInSeqsBERT():
 			return len(self.data)
 		
 		def __getitem__(self, idx):
-			input_ids = self.tokenizer.encode(self.data[idx]["sequence"], max_length=self.max_length, padding=True, truncation=True)
-			label = self.data[idx]["target"]
+			prompt = f"<|SEQUENCE|>{self.data[idx]["sequence"]}[SEP]"
+			prompt = f"<|FLANK_BEFORE|>{self.data[idx]["before"]}[SEP]"
+			prompt = f"<|FLANK_AFTER|>{self.data[idx]["after"]}[SEP]"
+			prompt += f"<|ORGANISM|>{self.data[idx]["organism"][:10]}[SEP]"
+			
+			prompt += "<|TARGET|>"
+
+			input_ids = self.tokenizer.encode(prompt, max_length=self.max_length, padding=True, truncation=True)
+			label = self.data[idx]["label"]
 
 			return torch.tensor(input_ids), torch.tensor(label)
 
-	def __init__(self, checkpoint="zhihan1996/DNA_bert_6"):
+	def __init__(self, checkpoint="bert-base-uncased"):
 		label_to_index, index_to_label = create_label_mapping(self.window_size)
 		self.label_to_index = label_to_index
 		self.index_to_label = index_to_label
@@ -46,6 +53,14 @@ class SWExInSeqsBERT():
 		self.model = BertForSequenceClassification.from_pretrained(checkpoint, num_labels=len(self.label_to_index))
 		self.tokenizer = BertTokenizer.from_pretrained(checkpoint, do_lower_case=False)
 	
+		special_tokens = ["[A]", "[C]", "[G]", "[T]", "[R]", "[Y]", "[S]", "[W]", "[K]", "[M]", "[B]", "[D]", "[H]", "[V]", "[N]", "[I]", "[E]", "[U]"]
+		self.tokenizer.add_tokens(special_tokens)
+
+		self.tokenizer.add_special_tokens({
+			"additional_special_tokens": ["<|SEQUENCE|>", "<|ORGANISM|>", "<|GENE|>", "<|FLANK_BEFORE|>", "<|FLANK_AFTER|>", "<|TARGET|>"]
+		})
+
+
 		self.model.resize_token_embeddings(len(self.tokenizer), mean_resizing=False)
 
 	def _collate_fn(self, batch):
@@ -55,8 +70,7 @@ class SWExInSeqsBERT():
 		return input_ids_padded, attention_mask, torch.tensor(labels)
 	
 	def _process_sequence(self, sequence):
-		res = sequence.replace("U", "N")
-		return f"".join(f"[{res.upper()}]" for nucl in sequence)
+		return f"".join(f"[{nucl.upper()}]" for nucl in sequence)
 	
 	def _process_target(self, label):
 		seq_length = len(label)
@@ -72,7 +86,7 @@ class SWExInSeqsBERT():
 	def _process_data(self, data):
 		final_data = []
 		
-		for sequence, labeled_sequence in zip(*data.values()):
+		for sequence, organism, labeled_sequence in zip(*data.values()):
 			seq_length = len(sequence)
 			
 			for i in range(seq_length - self.window_size + 1):
@@ -89,17 +103,13 @@ class SWExInSeqsBERT():
 				flank_after = self._process_sequence(flank_after)
 
 				label = self._process_target(label)
-				
-				final_sequence = flank_before+flank_after+seq
-	
-				remain = len(final_sequence) % 6
-				if remain != 0:
-					padding_len = 6 - remain
-					final_sequence += 'N' * padding_len
 
 				final_data.append({
-					"sequence":final_sequence,
-					"target": label
+					"sequence": seq,
+					"before": flank_before,
+					"after": flank_after,
+					"label": label,
+					"organism": organism
 				})
 
 		return final_data
@@ -166,8 +176,8 @@ class SWExInSeqsBERT():
 		torch.cuda.empty_cache()
 
 		if accelerator.is_local_main_process:
-			accelerator.unwrap_model(self.model).save_pretrained("./modelao-dna-3")
-			self.tokenizer.save_pretrained("./modelao-dna-3")
+			accelerator.unwrap_model(self.model).save_pretrained("./modelao")
+			self.tokenizer.save_pretrained("./modelao")
 
 	def evaluate(self):
 		self.model.to("cuda")
@@ -228,15 +238,17 @@ bert = SWExInSeqsBERT()
 print(len(sequence))
 
 bert.add_train_data({
-  "sequence": sequence[3950:4000],
-  "target": target[3950:4000]
+  "sequence": sequence[4900:5000],
+  "organism": organism[4900:5000],
+  "target": target[4900:5000]
 })
 
 bert.add_test_data({
   "sequence": sequence[5000:5030],
+  "organism": organism[5000:5030],
   "target": target[5000:5030]
 })
 
-bert.train(epochs=3)
+bert.train(epochs=5)
 
 bert.evaluate()
