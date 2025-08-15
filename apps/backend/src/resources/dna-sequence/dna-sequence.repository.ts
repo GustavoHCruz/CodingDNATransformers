@@ -55,6 +55,13 @@ export class DnaSequenceRepository {
       where: {
         length: { lt: maxLength },
         ...(lastId !== null && { id: { gt: lastId } }),
+        features: {
+          some: {
+            type: {
+              in: [FeatureEnum.INTRON, FeatureEnum.EXON],
+            },
+          },
+        },
       },
       select: {
         id: true,
