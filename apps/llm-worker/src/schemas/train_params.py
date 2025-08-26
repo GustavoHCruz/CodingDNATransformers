@@ -1,10 +1,14 @@
 from dataclasses import dataclass
+from typing import Literal
 
 
 @dataclass
 class TrainParams:
-  epochs: int
   batch_size: int
   gradient_accumulation: int
   lr: float
-  warmup_ratio: float
+  epochs: int
+  optim: Literal[
+    "adamw_torch",
+    "sgd",
+  ] = "adamw_torch"
