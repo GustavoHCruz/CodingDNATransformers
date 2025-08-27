@@ -1,21 +1,36 @@
 import json
-import os
 import random
-from typing import Literal, cast
+from typing import Literal, TypedDict, cast
 
 import pandas as pd
 import torch
 from datasets import Dataset
-from torch.utils.data import DataLoader
-from tqdm import tqdm
-from transformers import BatchEncoding, TrainingArguments
-from transformers.models.gpt2 import GPT2LMHeadModel, GPT2Tokenizer
-from transformers.trainer import Trainer
-
 from llms.base import BaseModel
 from schemas.train_params import TrainParams
+from tqdm import tqdm
+from transformers.models.gpt2 import GPT2LMHeadModel, GPT2Tokenizer
+from transformers.trainer import Trainer
+from transformers.training_args import TrainingArguments
 from utils.data_collators import DataCollatorForFT
+from utils.exceptions import MissingEssentialProp
 
+
+class Input(TypedDict):
+	sequence: str
+	target: str | None
+	organism: str | None
+	gene: str | None
+	before: str | None
+	after: str | None
+	hide_prob: float | None
+
+class GenerateInput(TypedDict):
+	sequence: str
+	organism: str | None
+	gene: str | None
+	before: str | None
+	after: str | None
+	hide_prob: float | None
 
 class ExInClassifierGPT(BaseModel):
 	model: GPT2LMHeadModel | None = None
@@ -81,17 +96,37 @@ class ExInClassifierGPT(BaseModel):
 	) -> str:
 		return f"[{target.upper()}]"
 	
-	def build_prompt(
+	def build_input(
 		self,
 		sequence: str,
 		target: str | None = None,
-		organism: str = '',
-		gene: str = '',
-		before: str = '',
-		after: str = '',
-		hide_prob: float = 0.1
-	) -> dict[Literal["question", "answer"], str]:
-			output = f"<|SEQUENCE|>{sequence}\n"
+		organism: str | None = None,
+		gene: str | None = None,
+		before: str | None = None,
+		after: str | None = None,
+		hide_prob: float = 0.01
+	) -> Input:
+		return {
+			"sequence": sequence,
+			"target": target,
+			"organism": organism,
+			"gene": gene,
+			"before": before,
+			"after": after,
+			"hide_prob": hide_prob
+		}
+	
+	def _build_input(
+		self,
+		sequence: str,
+		target: str | None = None,
+		organism: str | None = None,
+		gene: str | None = None,
+		before: str | None = None,
+		after: str | None = None,
+		hide_prob: float = 0.01
+	) -> dict[Literal["partial", "complete"], str]:
+			output = f"<|SEQUENCE|>{self._process_sequence(sequence)}\n"
 
 			if organism:
 				if random.random() > hide_prob:
@@ -102,28 +137,50 @@ class ExInClassifierGPT(BaseModel):
 					output += f"<|GENE|>{gene[:10]}\n"
 			
 			if before:
+				before = self._process_sequence(before)
 				if random.random() > hide_prob:
 					output += f"<|FLANK_BEFORE|>{before}\n"
 			
 			if after:
+				after = self._process_sequence(after)
 				if random.random() > hide_prob:
 					output += f"<|FLANK_AFTER|>{after}\n"
 			
 			output += "<|TARGET|>"
 
 			return {
-				"question": output,
-				"answer": f"{output}{target}"
+				"partial": output,
+				"complete": f"{output}{(self._process_target(target) if target else '')}"
 			}
 
 	def _tokenize(
 		self,
+		input_text: str
+	) -> tuple[torch.Tensor, torch.Tensor]:
+		if self.model is None or self.tokenizer is None:
+			raise MissingEssentialProp("Model or Tokenizer missing.")
+
+		tokenized = self.tokenizer(
+			input_text,
+			truncation=True,
+			max_length=self.max_length,
+			return_tensors="pt"
+		).to(self.model.device)
+
+		input_ids = tokenized["input_ids"]
+		input_ids = cast(torch.Tensor, input_ids)
+		attention_mask = tokenized["attention_mask"]
+		attention_mask = cast(torch.Tensor, input_ids)
+
+		return (input_ids, attention_mask)
+
+	def _tokenize_for_training(
+		self,
 		input_text: str,
 		expected_text: str
-	) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor] | None:
+	) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
 		if self.model is None or self.tokenizer is None:
-			self._log("Model or Tokenizer missing", "WARNING")
-			return None
+			raise MissingEssentialProp("Model or Tokenizer missing.")
 		
 		encoded_input = self.tokenizer(
 			input_text
@@ -145,46 +202,48 @@ class ExInClassifierGPT(BaseModel):
 		
 		return input_ids, attention_mask, labels
 
-	def load_data(
+	def _prepare_dataset(
 		self,
-		data: dict[Literal["sequence", "target", "organism", "gene", "before", "after"], list[str]],
-		hide_prob: float = 0.1
-	) -> None:
-		tokenized_data = []
-		for sequence, target, organism, gene, before, after in zip(data["sequence"], data["target"], data["organism"], data["gene"], data["before"], data["after"]):
-			promptfied = self.build_prompt(
-				sequence=sequence,
-				target=target,
-				organism=organism,
-				gene=gene,
-				before=before,
-				after=after,
-				hide_prob=hide_prob
+		dataset: list[Input]
+	) -> Dataset:
+		tokenized = []
+
+		for data in tqdm(dataset):
+			promptfied = self._build_input(
+				sequence=data["sequence"],
+				target=data.get("target"),
+				organism=data.get("organism", ""),
+				gene=data.get("gene", ""),
+				before=data.get("before", ""),
+				after=data.get("after", ""),
+				hide_prob=data.get("hide_prob") or 0.01
+			)
+			tokenized_input = self._tokenize_for_training(
+				input_text=promptfied["partial"],
+				expected_text=promptfied["complete"]
 			)
 
-			tokenized = self._tokenize(
-				input_text=promptfied["question"],
-				expected_text=promptfied["answer"]
-			)
+			input_ids, attention_mask, labels = tokenized_input
+			tokenized.append({
+				"input_ids": input_ids,
+				"attention_mask": attention_mask,
+				"labels": labels
+			})
 
-			if tokenized:
-				input_ids, attention_mask, labels = tokenized
-				tokenized_data.append({
-					"input_ids": input_ids,
-					"attention_mask": attention_mask,
-					"labels": labels
-				})
-
-		self.train_dataset = Dataset.from_list(tokenized_data)
+		return Dataset.from_list(tokenized)
 
 	def train(
 		self,
+		dataset: list[Input],
 		params: TrainParams
 	) -> None:
 		if not self.model or not self.tokenizer:
-			self._log("Model or Tokenizer not found", "WARNING")
-			return None
+			raise MissingEssentialProp("Model or Tokenizer missing.")
 		
+		self._log("Preparing dataset...")
+		data = self._prepare_dataset(dataset)
+		self._log("Dataset prepared!")
+
 		args = TrainingArguments(
 			num_train_epochs=params.epochs,
 			optim=params.optim,
@@ -192,70 +251,49 @@ class ExInClassifierGPT(BaseModel):
 			per_device_train_batch_size=params.batch_size,
 			gradient_accumulation_steps=params.gradient_accumulation,
 			lr_scheduler_type="cosine",
-			save_strategy="no"
+			save_strategy="no",
 		)
+
+		if self.seed:
+			args.seed = self.seed
 
 		trainer = Trainer(
 			model=self.model,
-			train_dataset=self.train_dataset,
+			train_dataset=data,
 			args=args,
 			data_collator=DataCollatorForFT(self.tokenizer),
 		)
 
+		self._log("Starting training...")
+
 		trainer.train()
 
-	def evaluate(
+		self._log("Training complete. You may save the model for later use.")
+
+	def generate(
+		self,
+		input: GenerateInput
+	) -> str:
+		if self.model is None or self.tokenizer is None:
+			raise MissingEssentialProp("Model or Tokenizer missing.")
 		
-	)
+		model_input = self._build_input(
+			sequence=input["sequence"],
+			organism=input.get("organism"),
+			gene=input.get("gene"),
+			before=input.get("before"),
+			after=input.get("after"),
+			hide_prob=input.get("hide_prob") or 0.01
+		)
 
-import os
+		input_ids, attention_mask = self._tokenize(model_input["partial"])
 
-import torch
-from sklearn.metrics import (accuracy_score, f1_score, precision_score,
-                             recall_score)
-from torch.utils.data import DataLoader
-from tqdm import tqdm
-
-
-def evaluate(
-	model_name: str,
-	uuid: str,
-	data_length: int,
-	batch_size: int,
-	seed: int
-):
-	y_true = []
-	y_pred = []
-
-	model.eval()
-	with torch.no_grad():
-		for batch in tqdm(dataloader):
-			input_ids, attention_mask, label = [b.to(model.device) for b in batch.values()]
-
-			responses = model.generate(
+		with torch.no_grad():
+			outputs = self.model.generate(
 				input_ids=input_ids,
 				attention_mask=attention_mask,
 				max_new_tokens=1,
-				pad_token_id=tokenizer.eos_token_id
+				pad_token_id=self.tokenizer.eos_token_id
 			)
-
-			for r, l in zip(responses, label):
-				# Pegamos o token previsto (último token gerado)
-				pred_token = r[-1].item()
-				true_token = l[0].item()
-
-				y_pred.append(pred_token)
-				y_true.append(true_token)
-
-	# Calcula métricas
-	acc = accuracy_score(y_true, y_pred)
-	prec = precision_score(y_true, y_pred, average="weighted", zero_division=0)
-	rec = recall_score(y_true, y_pred, average="weighted", zero_division=0)
-	f1 = f1_score(y_true, y_pred, average="weighted", zero_division=0)
-
-	print(f"Accuracy:  {acc:.4f}")
-	print(f"Precision: {prec:.4f}")
-	print(f"Recall:    {rec:.4f}")
-	print(f"F1-score:  {f1:.4f}")
-	print(f"F1-score:  {f1:.4f}")
-	print(f"F1-score:  {f1:.4f}")
+		
+		return self.tokenizer.decode(outputs[0])
