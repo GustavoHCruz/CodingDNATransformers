@@ -5,12 +5,13 @@ from typing import Literal, TypedDict, cast
 import pandas as pd
 import torch
 from datasets import Dataset
-from llms.base import BaseModel
-from schemas.train_params import TrainParams
 from tqdm import tqdm
 from transformers.models.gpt2 import GPT2LMHeadModel, GPT2Tokenizer
 from transformers.trainer import Trainer
 from transformers.training_args import TrainingArguments
+
+from llms.base import BaseModel
+from schemas.train_params import TrainParams
 from utils.data_collators import DataCollatorForFT
 from utils.exceptions import MissingEssentialProp
 
@@ -78,12 +79,6 @@ class ExInClassifierGPT(BaseModel):
 		self.model = GPT2LMHeadModel.from_pretrained(checkpoint)
 		self.tokenizer = GPT2Tokenizer.from_pretrained(checkpoint)
 
-		df = pd.read_csv(checkpoint)
-		self.history = df.to_dict()
-
-		with open("info.json", "w", encoding="utf-8") as f:
-			self.info = json.load(f)
-
 	def _process_sequence(
 		self,
 		sequence: str
@@ -95,6 +90,12 @@ class ExInClassifierGPT(BaseModel):
 		target: str
 	) -> str:
 		return f"[{target.upper()}]"
+	
+	def _unprocess_target(
+		self,
+		target: str
+	) -> str:
+		return target.replace("[", "").replace("]", "")
 	
 	def build_input(
 		self,
@@ -170,7 +171,7 @@ class ExInClassifierGPT(BaseModel):
 		input_ids = tokenized["input_ids"]
 		input_ids = cast(torch.Tensor, input_ids)
 		attention_mask = tokenized["attention_mask"]
-		attention_mask = cast(torch.Tensor, input_ids)
+		attention_mask = cast(torch.Tensor, attention_mask)
 
 		return (input_ids, attention_mask)
 
@@ -296,4 +297,4 @@ class ExInClassifierGPT(BaseModel):
 				pad_token_id=self.tokenizer.eos_token_id
 			)
 		
-		return self.tokenizer.decode(outputs[0])
+		return self._unprocess_target(self.tokenizer.decode(outputs[0][-1]))
