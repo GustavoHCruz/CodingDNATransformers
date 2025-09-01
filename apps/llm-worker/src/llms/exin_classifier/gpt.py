@@ -39,6 +39,8 @@ class ExInClassifierGPT(BaseModel):
 		self,
 		checkpoint: str
 	) -> None:
+		self.model = GPT2LMHeadModel.from_pretrained(checkpoint)
+
 		tokenizer = GPT2Tokenizer.from_pretrained(checkpoint)
 		tokenizer.pad_token = tokenizer.eos_token
 
@@ -60,8 +62,6 @@ class ExInClassifierGPT(BaseModel):
 
 		tokenizer.pad_token = tokenizer.eos_token
 		self.tokenizer = tokenizer
-
-		self.model = GPT2LMHeadModel.from_pretrained(checkpoint)
 
 		if self.model is None or self.tokenizer is None:
 			self._log("Error trying to load the checkpoint.", "WARNING")
@@ -286,6 +286,7 @@ class ExInClassifierGPT(BaseModel):
 
 		input_ids, attention_mask = self._tokenize(model_input["partial"])
 
+		self.model.eval()
 		with torch.no_grad():
 			outputs = self.model.generate(
 				input_ids=input_ids,

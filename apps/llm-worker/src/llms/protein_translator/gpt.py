@@ -1,121 +1,45 @@
-import csv
-import os
-import time
-from datetime import datetime
-from math import ceil
-from typing import Any, Generator
+from typing import Literal, TypedDict, cast
 
-import pandas as pd
 import torch
-from accelerate import Accelerator
-from config import SHARED_DIR, STORAGE_DIR
-from llms.utils import set_seed
-from redis_service import (CreateField, ProcessingStatus, TrainField,
-                           redis_service)
-from torch.nn.utils.rnn import pad_sequence
-from torch.optim import AdamW
-from torch.utils.data import DataLoader, IterableDataset
-from transformers.models.auto.modeling_auto import AutoModelForCausalLM
-from transformers.models.auto.tokenization_auto import AutoTokenizer
-from transformers.optimization import get_scheduler
+from datasets import Dataset
+from llms.base import BaseModel
+from schemas.train_params import TrainParams
+from tqdm import tqdm
+from transformers.models.gpt2 import GPT2LMHeadModel, GPT2Tokenizer
+from transformers.trainer import Trainer
+from transformers.training_args import TrainingArguments
+from utils.data_collators import DataCollatorForFT
+from utils.exceptions import MissingEssentialProp
 
 valid_dna = set("ACGTURYSWKMBDHVN")
 valid_prot = set("ACDEFGHIKLMNPQRSTVWY*X")
 
-def process_sequence(sequence: str) -> str:
-	return "".join(f"[DNA_{nucl.upper()}]" for nucl in sequence if nucl.upper() in valid_dna)
+class Input(TypedDict):
+	sequence: str
+	target: str | None
+	organism: str | None
 
-def process_target(target: str) -> str:
-	target = target + "*"
-	target = target[:target.find("*") + 1]
-	return "".join(f"[PROT_{prot.upper()}]" for prot in target if prot.upper() in valid_prot)
+class GenerateInput(TypedDict):
+	sequence: str
+	organism: str | None
 
-def promptfy(sequence: str, target: str) -> tuple[str, str]:
-	return f"<|DNA|> {sequence} <|PROTEIN|>", f"<|DNA|> {sequence} <|PROTEIN|> {target}"
+class ExInClassifierGPT(BaseModel):
+	model: GPT2LMHeadModel | None = None
+	tokenizer: GPT2Tokenizer | None = None
+	max_length = 1024
 
-class DNADatasetFinetune(IterableDataset):
-	def __init__(self, csv_path: str, tokenizer, dataset_total_length: int, sequence_max_length=1024) -> None:
-		self.csv_path = csv_path
-		self.tokenizer = tokenizer
-		self.max_length = sequence_max_length
-		self._length = dataset_total_length
-	
-	def __len__(self) -> int:
-		return self._length
+	def load_checkpoint(
+		self,
+		checkpoint: str
+	) -> None:
+		model = GPT2LMHeadModel.from_pretrained(checkpoint)
 
-	def __iter__(self) -> Generator[dict[str, torch.Tensor], Any, None]:
-		with open(self.csv_path, newline='') as csvfile:
-			reader = csv.DictReader(csvfile)
-			for row in reader:
-				sequence = process_sequence(row["sequence"])
-				target = process_target(row["target"])
-
-				partial, full = promptfy(sequence, target)
-
-				partial_encoded = self.tokenizer(partial)
-				full_encoded = self.tokenizer(
-					full,
-					truncation=True,
-					padding="max_length",
-					max_length=self.max_length
-				)
-
-				input_ids = full_encoded["input_ids"]
-				attention_mask = full_encoded["attention_mask"]
-
-				labels = [-100] * len(input_ids)
-				start = min(len(partial_encoded["input_ids"]), len(input_ids))
-
-				for i in range(start, len(input_ids)):
-					if input_ids[i] != self.tokenizer.pad_token_id:
-						labels[i] = input_ids[i]
-
-				yield {
-					"input_ids": torch.tensor(input_ids),
-					"attention_mask": torch.tensor(attention_mask),
-					"labels": torch.tensor(labels)
-				}
-
-class FinetuneDataCollator:
-	def __init__(self, tokenizer) -> None:
-		self.tokenizer = tokenizer
-		self.pad_token_id = tokenizer.pad_token_id
-
-	def __call__(self, batch) -> dict[str, torch.Tensor]:
-		input_ids = [example["input_ids"] for example in batch]
-		attention_mask = [example["attention_mask"] for example in batch]
-		labels = [example["labels"] for example in batch]
-
-		input_ids_padded = pad_sequence(input_ids, batch_first=True, padding_value=self.pad_token_id)
-		attention_mask_padded = pad_sequence(attention_mask, batch_first=True, padding_value=0)
-		labels_padded = pad_sequence(labels, batch_first=True, padding_value=-100)
-
-		return {
-			"input_ids": input_ids_padded,
-			"attention_mask": attention_mask_padded,
-			"labels": labels_padded
-		}
-
-def create_model(
-	checkpoint: str,
-	name: str,
-	uuid: str,
-	is_child: bool = False,
-) -> None:
-	redis_service.set_create_info(uuid, CreateField.STATUS, ProcessingStatus.IN_PROGRESS)
-
-	if is_child:
-		parent_checkpoint = os.path.join(STORAGE_DIR, "models", name)
-		model = AutoModelForCausalLM.from_pretrained(parent_checkpoint, low_cpu_mem_usage=False)
-		tokenizer = AutoTokenizer.from_pretrained(parent_checkpoint)
-
-	else:
-		model = AutoModelForCausalLM.from_pretrained(checkpoint)
-		tokenizer = AutoTokenizer.from_pretrained(checkpoint)
+		tokenizer = GPT2Tokenizer.from_pretrained(checkpoint)
+		tokenizer.pad_token = tokenizer.eos_token
 
 		special_tokens = ["[DNA_A]", "[DNA_C]", "[DNA_G]", "[DNA_T]", "[DNA_R]", "[DNA_Y]", "[DNA_S]", "[DNA_W]", "[DNA_K]", "[DNA_M]", "[DNA_B]", "[DNA_D]", "[DNA_H]", "[DNA_V]", "[DNA_N]", "[PROT_A]", "[PROT_C]", "[PROT_D]", "[PROT_E]", "[PROT_F]", "[PROT_G]", "[PROT_H]", "[PROT_I]", "[PROT_K]", "[PROT_L]", "[PROT_M]", "[PROT_N]", "[PROT_P]", "[PROT_Q]", "[PROT_R]", "[PROT_S]", "[PROT_T]", "[PROT_V]", "[PROT_W]", "[PROT_Y]", "[PROT_*]", "[PROT_X]"]
 		tokenizer.add_tokens(special_tokens)
-
+		
 		tokenizer.pad_token = "[PROT_*]"
 		tokenizer.eos_token = "[PROT_*]"
 
@@ -128,144 +52,210 @@ def create_model(
 
 		model.resize_token_embeddings(len(tokenizer), mean_resizing=False)
 
-	output_path = os.path.join(STORAGE_DIR, "models", name)
-	model.save_pretrained(output_path)
-	tokenizer.save_pretrained(output_path)
+		self.model = model
+		self.tokenizer = tokenizer
 
-	redis_service.set_create_info(uuid, CreateField.STATUS, ProcessingStatus.DONE)
+		if self.model is None or self.tokenizer is None:
+			self._log("Error trying to load the checkpoint.", "WARNING")
+			return None
+		
+		self.model.resize_token_embeddings(len(self.tokenizer), mean_resizing=False)
 
-def train_model(
-	name: str,
-	uuid: str,
-	data_length: int,
-	epochs: int,
-	batch_size: int,
-	gradient_accumulation: int,
-	lr: float,
-	warmup_ratio: float,
-	seed: int
-) -> None:
-	redis_service.set_train_info(uuid, TrainField.STATUS, ProcessingStatus.IN_PROGRESS)
+	def from_pretrained(
+		self,
+		checkpoint: str
+	) -> None:
+		self.model = GPT2LMHeadModel.from_pretrained(checkpoint)
+		self.tokenizer = GPT2Tokenizer.from_pretrained(checkpoint)
 
-	set_seed(seed)
+	def _process_sequence(
+		self,
+		sequence: str
+	) -> str:
+		return "".join(f"[DNA_{nucl.upper()}]" for nucl in sequence if nucl.upper() in valid_dna)
 
-	accelerator = Accelerator()
-	is_main_process = accelerator.is_main_process
-	num_gpus = accelerator.num_processes
+	def _process_target(
+		self,
+		target: str
+	) -> str:
+		target = target + "*"
+		target = target[:target.find("*") + 1]
+		return "".join(f"[PROT_{prot.upper()}]" for prot in target if prot.upper() in valid_prot)
+	
+	def build_input(
+		self,
+		sequence: str,
+		target: str | None = None,
+		organism: str | None = None
+	) -> Input:
+		return {
+			"sequence": sequence,
+			"target": target,
+			"organism": organism
+		}
+	
+	def _build_input(
+		self,
+		sequence: str,
+		target: str | None = None,
+		organism: str | None = None
+	) -> dict[Literal["partial", "complete"], str]:
+			output = f"<|DNA|>{sequence}"
 
-	if is_main_process:
-		redis_service.set_train_info(
-			uuid=uuid,
-			field=TrainField.GPU_AMOUNT,
-			value=num_gpus
+			if organism:
+				output += f"<|ORGANISM|>{organism[:10]}"
+
+			output += f"<|PROTEIN|>"
+
+			return {
+				"partial": output,
+				"complete": output+(target or "")
+			}	
+
+	def _tokenize(
+		self,
+		input_text: str
+	) -> tuple[torch.Tensor, torch.Tensor]:
+		if self.model is None or self.tokenizer is None:
+			raise MissingEssentialProp("Model or Tokenizer missing.")
+
+		tokenized = self.tokenizer(
+			input_text,
+			truncation=True,
+			max_length=self.max_length,
+			return_tensors="pt"
+		).to(self.model.device)
+
+		input_ids = tokenized["input_ids"]
+		input_ids = cast(torch.Tensor, input_ids)
+		attention_mask = tokenized["attention_mask"]
+		attention_mask = cast(torch.Tensor, attention_mask)
+
+		return (input_ids, attention_mask)
+
+	def _tokenize_for_training(
+		self,
+		input_text: str,
+		expected_text: str
+	) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+		if self.model is None or self.tokenizer is None:
+			raise MissingEssentialProp("Model or Tokenizer missing.")
+		
+		encoded_input = self.tokenizer(
+			input_text
+		)
+		encoded_expected = self.tokenizer(
+			expected_text
 		)
 
-	checkpoint_path_in = os.path.join(STORAGE_DIR, "models", f"{name}-temp")
-	checkpoint_path_out = os.path.join(STORAGE_DIR, "models", name)
-	model = AutoModelForCausalLM.from_pretrained(checkpoint_path_in)
-	tokenizer = AutoTokenizer.from_pretrained(checkpoint_path_in)
+		input_ids = torch.tensor(encoded_expected["input_ids"], dtype=torch.long)
+		attention_mask = torch.tensor(encoded_expected["attention_mask"], dtype=torch.bool)
 
-	data_path = os.path.join(SHARED_DIR, "temp", uuid)
+		labels = torch.full_like(input_ids, -100)
 
-	dataset = DNADatasetFinetune(csv_path=data_path+".csv", tokenizer=tokenizer, dataset_total_length=data_length)
-	dataloader = DataLoader(dataset, batch_size=batch_size, collate_fn=FinetuneDataCollator(tokenizer))
+		start = len(cast(list, encoded_input["input_ids"]))
 
-	optimizer = AdamW(model.parameters(), lr=lr)
-	num_training_steps = epochs * len(dataloader)
-	num_warmup_steps = int(warmup_ratio * num_training_steps)
+		for i in range(start, len(input_ids)):
+			if input_ids[i] != self.tokenizer.pad_token_id:
+				labels[i] = input_ids[i]
+		
+		return input_ids, attention_mask, labels
 
-	lr_scheduler = get_scheduler(
-		name="cosine",
-		optimizer=optimizer,
-		num_warmup_steps=num_warmup_steps,
-		num_training_steps=num_training_steps
-	)
+	def _prepare_dataset(
+		self,
+		dataset: list[Input]
+	) -> Dataset:
+		tokenized = []
 
-	model, optimizer, dataloader, lr_scheduler = accelerator.prepare(
-		model, optimizer, dataloader, lr_scheduler
-	)
+		for data in tqdm(dataset):
+			promptfied = self._build_input(
+				sequence=data["sequence"],
+				target=data.get("target"),
+				organism=data.get("organism", "")
+			)
+			tokenized_input = self._tokenize_for_training(
+				input_text=promptfied["partial"],
+				expected_text=promptfied["complete"]
+			)
 
-	dataloader_len_local = len(dataloader)
+			input_ids, attention_mask, labels = tokenized_input
+			tokenized.append({
+				"input_ids": input_ids,
+				"attention_mask": attention_mask,
+				"labels": labels
+			})
 
-	history = {"epoch": [], "time": [], "train_loss": [], "lr": []}
-	start_time = time.time()
+		return Dataset.from_list(tokenized)
 
-	num_update_steps_per_epoch = ceil(dataloader_len_local / gradient_accumulation)
-	max_train_steps = epochs * num_update_steps_per_epoch
-	
-	redis_service.set_train_info(
-		uuid=uuid,
-		field=TrainField.TOTAL_STEPS,
-		value=max_train_steps
-	)
+	def train(
+		self,
+		dataset: list[Input],
+		params: TrainParams
+	) -> None:
+		if not self.model or not self.tokenizer:
+			raise MissingEssentialProp("Model or Tokenizer missing.")
+		
+		self._log("Preparing dataset...")
+		data = self._prepare_dataset(dataset)
+		self._log("Dataset prepared!")
 
-	global_step = 0
-	model.train()
-	for epoch in range(epochs):
-		train_loss = 0.0
+		args = TrainingArguments(
+			num_train_epochs=params.epochs,
+			optim=params.optim,
+			learning_rate=params.lr,
+			per_device_train_batch_size=params.batch_size,
+			gradient_accumulation_steps=params.gradient_accumulation,
+			lr_scheduler_type="cosine",
+			save_strategy="no",
+		)
 
-		accumulated_loss = 0.0
-		for batch_idx, batch in enumerate(dataloader):
-			outputs = model(**batch)
-			loss = outputs.loss / gradient_accumulation
+		if self.seed:
+			args.seed = self.seed
 
-			accelerator.backward(loss)
-			accumulated_loss += loss.item()
+		trainer = Trainer(
+			model=self.model,
+			train_dataset=data,
+			args=args,
+			data_collator=DataCollatorForFT(self.tokenizer),
+		)
 
-			if (batch_idx + 1) % gradient_accumulation == 0 or (batch_idx + 1 == dataloader_len_local):
-				accelerator.clip_grad_norm_(model.parameters(), max_norm=0.5)
+		self._log("Starting training...")
 
-				optimizer.step()
-				lr_scheduler.step()
-				optimizer.zero_grad()
+		trainer.train()
 
-				loss_val = loss.item()
-				train_loss += loss_val
-				global_step += 1
+		self._log("Training complete. You may save the model for later use.")
 
-				steps_in_epoch = ceil(dataloader_len_local / gradient_accumulation)
-				current_epoch_fraction = epoch + (global_step % steps_in_epoch) / steps_in_epoch
+	def generate(
+		self,
+		input: GenerateInput
+	) -> str:
+		if self.model is None or self.tokenizer is None:
+			raise MissingEssentialProp("Model or Tokenizer missing.")
+		
+		model_input = self._build_input(
+			sequence=input["sequence"],
+			organism=input.get("organism")
+		)
 
-				current_lr = lr_scheduler.get_last_lr()[0]
+		input_ids, attention_mask = self._tokenize(model_input["partial"])
 
-				redis_service.set_train_info(
-					uuid=uuid,
-					field=TrainField.LOSS,
-					value=loss_val
-				)
-				redis_service.set_train_info(
-					uuid=uuid,
-					field=TrainField.LR,
-					value=current_lr
-				)
-				redis_service.set_train_info(
-					uuid=uuid,
-					field=TrainField.STEP,
-					value=global_step
-				)
+		self.model.eval()
+		with torch.no_grad():
+			generated = self.model.generate(
+				input_ids=input_ids,
+				attention_mask=attention_mask,
+				max_new_tokens=128,
+				pad_token_id=self.tokenizer.pad_token_id,
+				do_sample=True,
+				temperature=0.8,
+				top_p=0.95,
+				typical_p=0.98,
+				num_beams=1
+			)
+		
+		generated_texts = self.tokenizer.decode(generated[0], skip_special_tokens=False)
 
-				history["epoch"].append(round(current_epoch_fraction, 2))
-				history["train_loss"].append(accumulated_loss)
-				history["lr"].append(current_lr)
-				history["time"].append(time.time() - start_time)
-
-				accumulated_loss = 0.0
-	
-	model = accelerator.unwrap_model(model)
-
-	if is_main_process:
-		model.save_pretrained(checkpoint_path_out)
-		tokenizer.save_pretrained(checkpoint_path_out)
-
-		df = pd.DataFrame(history)
-		now = datetime.now().strftime("%Y%m%d-%H%M%S")
-		df.to_csv(f"{checkpoint_path_out}/history-{now}.csv", index=False)
-	
-	accelerator.wait_for_everyone()
-	accelerator.end_training()
-
-	redis_service.set_train_info(
-		uuid=uuid,
-		field=TrainField.STATUS,
-		value=ProcessingStatus.DONE
-	)
+		start = generated_texts.find("<|PROTEIN|>")
+		protein_tokenized = generated_texts[start + len("<|PROTEINS|>"):].strip()
+		
+		return self.tokenizer.decode(protein_tokenized)

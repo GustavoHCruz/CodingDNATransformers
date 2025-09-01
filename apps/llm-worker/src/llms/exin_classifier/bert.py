@@ -1,308 +1,305 @@
 import random
-import time
+from typing import Literal, TypedDict, cast
 
 import torch
-from plyer import notification
-from src.llms.SplicingTransformers import SplicingTransformers
-from torch.optim import AdamW
-from torch.utils.data import DataLoader, Dataset
-from transformers.models.bert import (BertForSequenceClassification,
-                                      BertTokenizer)
+from datasets import Dataset
+from llms.base import BaseModel
+from schemas.train_params import TrainParams
+from tqdm import tqdm
+from transformers import BertForSequenceClassification, BertTokenizer
+from transformers.trainer import Trainer
+from transformers.training_args import TrainingArguments
+from utils.data_collators import DataCollatorForFT
+from utils.exceptions import MissingEssentialProp
 
 
-class ExInSeqsBERT(SplicingTransformers):
-	class __SpliceBERTDataset__(Dataset):
-		def __init__(self, data, tokenizer, sequence_len, flanks_size, feat_hide_prob):
-			self.data = data
-			self.tokenizer = tokenizer
-			self.max_length = sequence_len + flanks_size * 2 + 100
-			self.feat_hide_prob = feat_hide_prob
+class Input(TypedDict):
+	sequence: str
+	target: str | None
+	organism: str | None
+	gene: str | None
+	before: str | None
+	after: str | None
+	hide_prob: float | None
 
-		def __len__(self):
-			return len(self.data["sequence"])
+class GenerateInput(TypedDict):
+	sequence: str
+	organism: str | None
+	gene: str | None
+	before: str | None
+	after: str | None
+	hide_prob: float | None
+
+class ExInClassifierBERT(BaseModel):
+	model: BertForSequenceClassification | None = None
+	tokenizer: BertTokenizer | None = None
+	max_length = 512
+
+	def load_checkpoint(
+		self,
+		checkpoint: str
+	) -> None:
+		self.model = BertForSequenceClassification.from_pretrained(checkpoint, num_labels=2)
+		tokenizer = BertTokenizer.from_pretrained(checkpoint, do_lower_case=False)
+
+		special_tokens = ["[A]", "[C]", "[G]", "[T]", "[R]", "[Y]", "[S]", "[W]", "[K]", "[M]", "[B]", "[D]", "[H]", "[V]", "[N]"]
+		tokenizer.add_tokens(special_tokens)
+
+		tokenizer.add_special_tokens({
+			"additional_special_tokens": [
+				"<|SEQUENCE|>",
+				"<|ORGANISM|>",
+				"<|GENE|>",
+				"<|FLANK_BEFORE|>",
+				"<|FLANK_AFTER|>",
+				"<|TARGET|>"
+			]
+		})
+
+		tokenizer.add_eos_tokens = True
+
+		tokenizer.pad_tokens = tokenizer.eos_token
+		self.tokenizer = tokenizer
+
+		if self.model is None or self.tokenizer is None:
+			self._log("Error trying to load the checkpoint.", "WARNING")
+			return None
 		
-		def __getitem__(self, idx):
-			prompt = f"Sequence:{self.data["sequence"][idx]}[SEP]"
+		self.model.resize_token_embeddings(len(self.tokenizer), mean_resizing=False)
 
-			if len(self.data["organism"]) > idx and self.data["organism"][idx]:
-				if random.random() > self.feat_hide_prob:
-					prompt += f"Organism:{self.data["organism"][idx][:20]}[SEP]"
-			
-			if len(self.data["gene"]) > idx and self.data["gene"][idx]:
-				if random.random() > self.feat_hide_prob:
-					prompt += f"Gene:{self.data["gene"][idx][:20]}[SEP]"
-
-			if len(self.data["flank_before"]) > idx and self.data["flank_before"][idx]:
-				if random.random() > self.feat_hide_prob:
-					prompt += f"Flank Before:{self.data["flank_before"][idx]}[SEP]"
-
-			if len(self.data["flank_after"]) > idx and self.data["flank_after"][idx]:
-				if random.random() > self.feat_hide_prob:
-					prompt += f"Flank After:{self.data["flank_after"][idx]}[SEP]"
-			
-			prompt += "Answer:"
-
-			input_ids = self.tokenizer.encode(prompt, max_length=self.max_length, padding=True, truncation=True)
-			label = self.data["label"][idx]
-
-			return torch.tensor(input_ids), torch.tensor(label)
+		self.exon_token = 0
+		self.intron_token = 1
 	
-	def __init__(self, checkpoint="bert-base-uncased", device="cuda", seed=None, notification=False,  logs_dir="./", models_dir="./", alias=None, log_level="info"):
-		if seed:
-			self._set_seed(seed)
+	def from_pretrained(
+		self,
+		checkpoint: str
+	) -> None:
+		self.model = BertForSequenceClassification.from_pretrained(checkpoint)
+		self.tokenizer = BertTokenizer.from_pretrained(checkpoint)
 
-		self.log_level = log_level
+		self.exon_token = 0
+		self.intron_token = 1
 
-		if checkpoint != "bert-base-uncased":
-			self.load_checkpoint(checkpoint)
-		else:
-			self.model = BertForSequenceClassification.from_pretrained(checkpoint, num_labels=2)
-			self.tokenizer = BertTokenizer.from_pretrained(checkpoint, do_lower_case=False)
-		
-		if checkpoint == "bert-base-uncased":
-			special_tokens = ["[A]", "[C]", "[G]", "[T]", "[R]", "[Y]", "[S]", "[W]", "[K]", "[M]", "[B]", "[D]", "[H]", "[V]", "[N]"]
-			self.tokenizer.add_tokens(special_tokens)
-			self.model.resize_token_embeddings(len(self.tokenizer), mean_resizing=False)
-
-		self.intron_token = 0
-		self.exon_token = 1
-		super().__init__(checkpoint=checkpoint, device=device, seed=seed, notification=notification, logs_dir=logs_dir, models_dir=models_dir, alias=alias)
-		
-	def load_checkpoint(self, path):
-		self.model = BertForSequenceClassification.from_pretrained(path)
-		self.tokenizer = BertTokenizer.from_pretrained(path)
-
-	def _collate_fn(self, batch):
-		input_ids, labels = zip(*batch)
-		input_ids_padded = torch.nn.utils.rnn.pad_sequence(input_ids, batch_first=True, padding_value=self.tokenizer.pad_token_id)
-		attention_mask = (input_ids_padded != self.tokenizer.pad_token_id).long()
-		return input_ids_padded, attention_mask, torch.tensor(labels)
-	
-	def _process_sequence(self, sequence):
+	def _process_sequence(
+		self,
+		sequence: str
+	) -> str:
 		return f"".join(f"[{nucl.upper()}]" for nucl in sequence)
 	
-	def _process_target(self, label):
-		return 0 if label == "intron" else 1
+	def _process_target(
+		self,
+		label: str
+	) -> Literal[0, 1]:
+		if label == "EXON":
+			return 0
+		if label == "INTRON":
+			return 1
+		raise ValueError("Could not find a valid label.")
 	
-	def _process_data(self, data):
-		data["sequence"] = [self._process_sequence(sequence) for sequence in data["sequence"]]
-		data["label"] = [self._process_target(label) for label in data["label"]]
-		data["flank_before"] = [self._process_sequence(sequence) for sequence in data["flank_before"]]
-		data["flank_after"] = [self._process_sequence(sequence) for sequence in data["flank_after"]]
-
-		return data
+	def _unprocess_target(
+		self,
+		target: int
+	) -> str:
+		if target == 0:
+			return "EXON"
+		return "INTRON"
 	
-	def add_train_data(self, data, batch_size=32, sequence_len=512, data_config=None):
-		flanks_size = 10
-		feat_hide_prob = 0.01
-		if "flanks_size" in data_config:
-			flanks_size = data_config["flanks_size"]
-		if "feat_hide_prob" in data_config:
-			feat_hide_prob = data_config["feat_hide_prob"]
-
-		if sequence_len > 512:
-			raise ValueError("cannot support sequences_len higher than 512")
-		if flanks_size > 50:
-			raise ValueError("cannot support flanks_size higher than 50")
-
-		self._data_config = {
-			"sequence_len": sequence_len,
-			"flanks_size": flanks_size,
-			"batch_size": batch_size,
-			"feat_hide_prob": feat_hide_prob
+	def build_input(
+		self,
+		sequence: str,
+		target: str | None = None,
+		organism: str | None = None,
+		gene: str | None = None,
+		before: str | None = None,
+		after: str | None = None,
+		hide_prob: float = 0.01
+	) -> Input:
+		return {
+			"sequence": sequence,
+			"target": target,
+			"organism": organism,
+			"gene": gene,
+			"before": before,
+			"after": after,
+			"hide_prob": hide_prob
 		}
+	
+	def _build_input(
+		self,
+		sequence: str,
+		target: str | None = None,
+		organism: str | None = None,
+		gene: str | None = None,
+		before: str | None = None,
+		after: str | None = None,
+		hide_prob: float = 0.01
+	) -> dict[Literal["partial", "complete"], str]:
+		output = f"<|SEQUENCE|>{self._process_sequence(sequence)}[SEP]"
+
+		if organism:
+			if random.random() > hide_prob:
+				output += f"<|ORGANISM|>{organism[:10]}[SEP]"
+
+		if gene:
+			if random.random() > hide_prob:
+				output += f"<|GENE|>{gene[:10]}[SEP]"
 		
-		data = self._process_data(data)
-
-		dataset = self.__SpliceBERTDataset__(data, self.tokenizer, sequence_len=sequence_len, flanks_size=flanks_size, feat_hide_prob=feat_hide_prob)
-
-		self.train_dataset = dataset
-		self.train_dataloader = DataLoader(self.train_dataset, batch_size=batch_size, shuffle=True, collate_fn=self._collate_fn)
-
-	def _check_test_compatibility(self, sequence_len, flanks_size, batch_size, feat_hide_prob):
-		if hasattr(self, "_train_config"):
-			if self._train_config["sequence_len"] != sequence_len or \
-			self._train_config["flanks_size"] != flanks_size or \
-			self._train_config["batch_size"] != batch_size or \
-			self._train_config["feat_hide_prob"] != feat_hide_prob:
-				print("Detected a different test dataloader configuration of the one used during training. This may lead to suboptimal results.")
-
-	def add_test_data(self, data, batch_size=32, sequence_len=512, data_config=None):
-		flanks_size = 10
-		feat_hide_prob = 0.01
-		if "flanks_size" in data_config:
-			flanks_size = data_config["flanks_size"]
-		if "feat_hide_prob" in data_config:
-			feat_hide_prob = data_config["feat_hide_prob"]
-
-		self._check_test_compatibility(sequence_len=sequence_len, flanks_size=flanks_size, batch_size=batch_size, feat_hide_prob=feat_hide_prob)
-
-		data = self._process_data(data)
-
-		self.test_dataset = self.__SpliceBERTDataset__(data, self.tokenizer, sequence_len=sequence_len, flanks_size=flanks_size, feat_hide_prob=feat_hide_prob)
-		self.test_dataloader = DataLoader(self.test_dataset, batch_size=batch_size, shuffle=True, collate_fn=self._collate_fn)
-
-	def train(self, lr=2e-5, epochs=3, save_at_end=True, save_freq=5):
-		if not hasattr(self, "train_dataloader"):
-			raise ValueError("Cannot find the train dataloader, make sure you initialized it.")
+		if before:
+			before = self._process_sequence(before)
+			if random.random() > hide_prob:
+				output += f"<|FLANK_BEFORE|>{before}[SEP]"
 		
-		self.start_time = time.time()
-		self._get_next_model_dir()
+		if after:
+			after = self._process_sequence(after)
+			if random.random() > hide_prob:
+				output += f"<|FLANK_AFTER|>{after}[SEP]"
 		
-		self.model.to(self._device)
-		self.optimizer = AdamW(self.model.parameters(), lr=lr)
+		output += "<|TARGET|>"
 
-		self._train_config = dict(**{
-			"lr": lr,
-			"epochs": epochs
-		}, **self._data_config)
-		if hasattr(self, "seed"):
-			self._train_config.update({
-				"seed": self.seed
+		return {
+			"partial": output,
+			"complete": f"{output}{(self._process_target(target) if target else '')}"
+		}
+	
+	def _tokenize(
+		self,
+		input_text: str
+	) -> tuple[torch.Tensor, torch.Tensor]:
+		if self.model is None or self.tokenizer is None:
+			raise MissingEssentialProp("Model or Tokenizer missing.")
+
+		tokenized = self.tokenizer(
+			input_text,
+			truncation=True,
+			max_length=self.max_length,
+			return_tensors="pt"
+		).to(self.model.device)
+
+		input_ids = tokenized["input_ids"]
+		input_ids = cast(torch.Tensor, input_ids)
+		attention_mask = tokenized["attention_mask"]
+		attention_mask = cast(torch.Tensor, attention_mask)
+
+		return (input_ids, attention_mask)
+	
+	def _tokenize_for_training(
+		self,
+		input_text: str,
+		expected_text: str
+	) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+		if self.model is None or self.tokenizer is None:
+			raise MissingEssentialProp("Model or Tokenizer missing.")
+		
+		encoded_input = self.tokenizer(
+			input_text
+		)
+		encoded_expected = self.tokenizer(
+			expected_text
+		)
+
+		input_ids = torch.tensor(encoded_expected["input_ids"], dtype=torch.long)
+		attention_mask = torch.tensor(encoded_expected["attention_mask"], dtype=torch.bool)
+
+		labels = torch.full_like(input_ids, -100)
+
+		start = len(cast(list, encoded_input["input_ids"]))
+
+		for i in range(start, len(input_ids)):
+			if input_ids[i] != self.tokenizer.pad_token_id:
+				labels[i] = input_ids[i]
+		
+		return input_ids, attention_mask, labels
+
+	def _prepare_dataset(
+		self,
+		dataset: list[Input]
+	) -> Dataset:
+		tokenized = []
+
+		for data in tqdm(dataset):
+			promptfied = self._build_input(
+				sequence=data["sequence"],
+				target=data.get("target"),
+				organism=data.get("organism", ""),
+				gene=data.get("gene", ""),
+				before=data.get("before", ""),
+				after=data.get("after", ""),
+				hide_prob=data.get("hide_prob") or 0.01
+			)
+			tokenized_input = self._tokenize_for_training(
+				input_text=promptfied["partial"],
+				expected_text=promptfied["complete"]
+			)
+
+			input_ids, attention_mask, labels = tokenized_input
+			tokenized.append({
+				"input_ids": input_ids,
+				"attention_mask": attention_mask,
+				"labels": labels
 			})
 
-		history = {"epoch": [], "time": [], "train_loss": []}
+		return Dataset.from_list(tokenized)
 
-		for epoch in range(epochs):
-			self.model.train()
-			train_loss = 0
-
-			if self.log_level == "info":
-				train_bar = tqdm(self.train_dataloader, desc=f"Training Epoch {epoch+1}/{epochs}", leave=True)
-			for batch in self.train_dataloader:
-				self.optimizer.zero_grad()
-
-				input_ids, attention_mask, labels = [b.to(self._device) for b in batch]
-				outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-
-				loss = outputs.loss
-				loss.backward()
-				self.optimizer.step()
-				train_loss += loss.item()
-
-				if self.log_level == "info":
-					train_bar.update(1)
-					train_bar.set_postfix({"Loss": train_loss/train_bar.n})
-
-			train_loss /= len(self.train_dataloader)
-			history["train_loss"].append(train_loss)
-			if self.log_level == "info":
-				train_bar.set_postfix({"Loss": train_loss})
-				train_bar.close()
-
-			history["epoch"].append(epoch)
-
-			if save_freq and (epoch+1) % save_freq == 0:
-				self._save_checkpoint(epoch=epoch)
-
-			self.epoch_end_time = time.time()
-			history["time"].append(self.epoch_end_time - self.start_time)
-
-		if self.notification:
-			notification.notify(title="Training complete", timeout=5)
-
-		torch.cuda.empty_cache()
-
-		self._save_history(history=history)
-		self._save_config()
-
-		if save_at_end:
-			self.save_checkpoint()
-
-	def evaluate(self):
-		if not hasattr(self, "test_dataloader"):
-			raise ValueError("Can't find the test dataloader, make sure you initialized it.")
+	def train(
+		self,
+		dataset: list[Input],
+		params: TrainParams
+	) -> None:
+		if not self.model or not self.tokenizer:
+			raise MissingEssentialProp("Model or Tokenizer missing.")
 		
-		if not hasattr(self, "_logs_dir"):
-			self._get_next_model_dir()
+		self._log("Preparing dataset...")
+		data = self._prepare_dataset(dataset)
+		self._log("Dataset prepared!")
 
-		self.model.to(self._device)
-		total_loss = 0
-		total_correct = 0
-		total_samples = 0
-		exon_correct = 0
-		exon_total = 0
-		intron_correct = 0
-		intron_total = 0
+		args = TrainingArguments(
+			num_train_epochs=params.epochs,
+			optim=params.optim,
+			learning_rate=params.lr,
+			per_device_train_batch_size=params.batch_size,
+			gradient_accumulation_steps=params.gradient_accumulation,
+			lr_scheduler_type="cosine",
+			save_strategy="no",
+		)
+
+		if self.seed:
+			args.seed = self.seed
+
+		trainer = Trainer(
+			model=self.model,
+			train_dataset=data,
+			args=args,
+			data_collator=DataCollatorForFT(self.tokenizer),
+		)
+
+		self._log("Starting training...")
+
+		trainer.train()
+
+		self._log("Training complete. You may save the model for later use.")
+
+	def generate(
+		self,
+		input: GenerateInput
+	) -> str:
+		if self.model is None or self.tokenizer is None:
+			raise MissingEssentialProp("Model or Tokenizer missing.")
+		
+		model_input = self._build_input(
+			sequence=input["sequence"],
+			organism=input.get("organism"),
+			gene=input.get("gene"),
+			before=input.get("before"),
+			after=input.get("after"),
+			hide_prob=input.get("hide_prob") or 0.01
+		)
+
+		input_ids, _ = self._tokenize(model_input["partial"])
 
 		self.model.eval()
 		with torch.no_grad():
-			if self.log_level == "info":
-				eval_bar = tqdm(self.test_dataloader, desc="Evaluating", leave=True)
-			for batch in self.test_dataloader:
-				input_ids, attention_mask, labels = [b.to(self._device) for b in batch]
-				outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-				
-				loss = outputs.loss
-				total_loss += loss.item()
-
-				predictions = torch.argmax(outputs.logits, dim=-1)
-
-				for prediction, label in zip(predictions, labels):
-					if prediction == label:
-						total_correct += 1
-					
-						if label.item() == self.exon_token:
-							exon_correct += 1
-						else:
-							intron_correct += 1
-
-					if label.item() == self.exon_token:
-						exon_total += 1
-					else:
-						intron_total += 1
-					
-					total_samples += 1
-
-				if self.log_level == "info":
-					eval_bar.update(1)
-					eval_bar.set_postfix({"Eval loss": total_loss/eval_bar.n})
-			
-		if self.log_level == "info":
-			eval_bar.close()
-		total_loss /= len(self.test_dataloader)
-		overall_accuracy = total_correct / total_samples if total_samples > 0 else 0.0
-		exon_accuracy = exon_correct / exon_total if exon_total > 0 else 0.0
-		intron_accuracy = intron_correct / intron_total if intron_total > 0 else 0.0
-
-		print(f"Evaluation complete")
-		print(f"Average loss: {total_loss:.4f}")
-		print(f"Overall Accuracy: {overall_accuracy:.4f}")
-		print(f"Exon accuracy: {exon_accuracy:.4f}")
-		print(f"Intron accuracy: {intron_accuracy:.4f}")
-
-		self._eval_results = {
-			"avg loss": total_loss,
-			"overall accuracy": overall_accuracy,
-			"exon accuracy": exon_accuracy,
-			"intron accuracy": intron_accuracy
-		}
-
-		self._save_evaluation_results()
-
-		if self.notification:
-			notification.notify(title="Evaluation complete", timeout=5)
-	
-	def _prediction_mapping(self, prediction):
-		return "intron" if torch.argmax(prediction.logits, dim=-1).tolist() == [0] else "exon"
-	
-	def predict_single(self, data, map_pred=True):
-		sequence = self._process_sequence(data["sequence"])
+			prediction = self.model(
+				input_ids=input_ids
+			)
 		
-		keys = ["gene", "organism", "flank_before", "flank_after"]
-		prompt = f"Sequence: {sequence}\n"
-		for key in keys:
-			if hasattr(data, key):
-				prompt += f"{key.capitalize()}: {data[key]}\n"
-		prompt += "Answer: "
-
-		input_ids = self.tokenizer.encode(prompt, return_tensors="pt").to(self._device)
-
-		self.model.eval()
-		with torch.no_grad():
-			prediction = self.model(input_ids=input_ids)
-
-		if map_pred:
-			return self._prediction_mapping(prediction)
-		
-		return prediction
+		return self._unprocess_target(prediction)
