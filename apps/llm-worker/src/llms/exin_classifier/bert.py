@@ -6,10 +6,10 @@ from datasets import Dataset
 from llms.base import BaseModel
 from schemas.train_params import TrainParams
 from tqdm import tqdm
-from transformers import BertForSequenceClassification, BertTokenizer
+from transformers import (BertForSequenceClassification, BertTokenizer,
+                          DataCollatorWithPadding)
 from transformers.trainer import Trainer
 from transformers.training_args import TrainingArguments
-from utils.data_collators import DataCollatorForFT
 from utils.exceptions import MissingEssentialProp
 
 
@@ -66,9 +66,6 @@ class ExInClassifierBERT(BaseModel):
 			return None
 		
 		self.model.resize_token_embeddings(len(self.tokenizer), mean_resizing=False)
-
-		self.exon_token = 0
-		self.intron_token = 1
 	
 	def from_pretrained(
 		self,
@@ -76,9 +73,6 @@ class ExInClassifierBERT(BaseModel):
 	) -> None:
 		self.model = BertForSequenceClassification.from_pretrained(checkpoint)
 		self.tokenizer = BertTokenizer.from_pretrained(checkpoint)
-
-		self.exon_token = 0
-		self.intron_token = 1
 
 	def _process_sequence(
 		self,
@@ -133,33 +127,34 @@ class ExInClassifierBERT(BaseModel):
 		before: str | None = None,
 		after: str | None = None,
 		hide_prob: float = 0.01
-	) -> dict[Literal["partial", "complete"], str]:
-		output = f"<|SEQUENCE|>{self._process_sequence(sequence)}[SEP]"
+	) -> tuple[str, int | None]:
+		output = f"<|SEQUENCE|>{self._process_sequence(sequence)}"
 
 		if organism:
 			if random.random() > hide_prob:
-				output += f"<|ORGANISM|>{organism[:10]}[SEP]"
+				output += f"<|ORGANISM|>{organism[:10]}"
 
 		if gene:
 			if random.random() > hide_prob:
-				output += f"<|GENE|>{gene[:10]}[SEP]"
+				output += f"<|GENE|>{gene[:10]}"
 		
 		if before:
 			before = self._process_sequence(before)
 			if random.random() > hide_prob:
-				output += f"<|FLANK_BEFORE|>{before}[SEP]"
+				output += f"<|FLANK_BEFORE|>{before}"
 		
 		if after:
 			after = self._process_sequence(after)
 			if random.random() > hide_prob:
-				output += f"<|FLANK_AFTER|>{after}[SEP]"
+				output += f"<|FLANK_AFTER|>{after}"
 		
 		output += "<|TARGET|>"
 
-		return {
-			"partial": output,
-			"complete": f"{output}{(self._process_target(target) if target else '')}"
-		}
+		label = None
+		if target:
+			label = self._process_target(target)
+
+		return output, label 
 	
 	def _tokenize(
 		self,
@@ -184,31 +179,21 @@ class ExInClassifierBERT(BaseModel):
 	
 	def _tokenize_for_training(
 		self,
-		input_text: str,
-		expected_text: str
+		sentence: str,
+		target: int
 	) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
 		if self.model is None or self.tokenizer is None:
 			raise MissingEssentialProp("Model or Tokenizer missing.")
 		
 		encoded_input = self.tokenizer(
-			input_text
-		)
-		encoded_expected = self.tokenizer(
-			expected_text
+			sentence
 		)
 
-		input_ids = torch.tensor(encoded_expected["input_ids"], dtype=torch.long)
-		attention_mask = torch.tensor(encoded_expected["attention_mask"], dtype=torch.bool)
+		input_ids = torch.tensor(encoded_input["input_ids"], dtype=torch.long)
+		attention_mask = torch.tensor(encoded_input["attention_mask"], dtype=torch.bool)
+		label = torch.tensor([target], dtype=torch.long)
 
-		labels = torch.full_like(input_ids, -100)
-
-		start = len(cast(list, encoded_input["input_ids"]))
-
-		for i in range(start, len(input_ids)):
-			if input_ids[i] != self.tokenizer.pad_token_id:
-				labels[i] = input_ids[i]
-		
-		return input_ids, attention_mask, labels
+		return input_ids, attention_mask, label
 
 	def _prepare_dataset(
 		self,
@@ -217,7 +202,7 @@ class ExInClassifierBERT(BaseModel):
 		tokenized = []
 
 		for data in tqdm(dataset):
-			promptfied = self._build_input(
+			sentence, target = self._build_input(
 				sequence=data["sequence"],
 				target=data.get("target"),
 				organism=data.get("organism", ""),
@@ -226,9 +211,13 @@ class ExInClassifierBERT(BaseModel):
 				after=data.get("after", ""),
 				hide_prob=data.get("hide_prob") or 0.01
 			)
+
+			if target is None:
+				raise ValueError("Target is missing.")
+
 			tokenized_input = self._tokenize_for_training(
-				input_text=promptfied["partial"],
-				expected_text=promptfied["complete"]
+				sentence=sentence,
+				target=target
 			)
 
 			input_ids, attention_mask, labels = tokenized_input
@@ -269,7 +258,7 @@ class ExInClassifierBERT(BaseModel):
 			model=self.model,
 			train_dataset=data,
 			args=args,
-			data_collator=DataCollatorForFT(self.tokenizer),
+			data_collator=DataCollatorWithPadding(self.tokenizer),
 		)
 
 		self._log("Starting training...")
@@ -285,7 +274,7 @@ class ExInClassifierBERT(BaseModel):
 		if self.model is None or self.tokenizer is None:
 			raise MissingEssentialProp("Model or Tokenizer missing.")
 		
-		model_input = self._build_input(
+		sentence, _ = self._build_input(
 			sequence=input["sequence"],
 			organism=input.get("organism"),
 			gene=input.get("gene"),
@@ -294,12 +283,13 @@ class ExInClassifierBERT(BaseModel):
 			hide_prob=input.get("hide_prob") or 0.01
 		)
 
-		input_ids, _ = self._tokenize(model_input["partial"])
+		input_ids, _ = self._tokenize(sentence)
 
 		self.model.eval()
 		with torch.no_grad():
-			prediction = self.model(
+			outputs = self.model(
 				input_ids=input_ids
 			)
+			pred_id = torch.argmax(outputs.logits, dim=-1).item()
 		
-		return self._unprocess_target(prediction)
+		return self._unprocess_target(int(pred_id))
