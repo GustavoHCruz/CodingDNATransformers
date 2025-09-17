@@ -114,6 +114,7 @@ class BaseModel(ABC):
 
 		self.model.save_pretrained(output_path)
 		self.tokenizer.save_pretrained(output_path)
+		self._log(f"Successfully saved at '{output_path}'")
 
 	def unload_model(self) -> None:
 		try:

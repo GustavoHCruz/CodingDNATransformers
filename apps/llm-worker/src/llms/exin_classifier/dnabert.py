@@ -2,13 +2,14 @@ from typing import Literal, TypedDict
 
 import torch
 from datasets import Dataset
-from llms.base import BaseModel
-from schemas.train_params import TrainParams
 from tqdm import tqdm
 from transformers import (AutoModelForSequenceClassification, AutoTokenizer,
                           DataCollatorWithPadding)
 from transformers.trainer import Trainer
 from transformers.training_args import TrainingArguments
+
+from llms.base import BaseModel
+from schemas.train_params import TrainParams
 from utils.exceptions import MissingEssentialProp
 
 
@@ -63,8 +64,8 @@ class ExInClassifierDNABERT(BaseModel):
 		target: int
 	) -> str:
 		if target == 0:
-			return "EXON"
-		return "INTRON"
+			return "INTRON"
+		return "EXON"
 
 	def build_input(
 		self,
