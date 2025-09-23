@@ -1,3 +1,4 @@
+import re
 from typing import Literal, TypedDict, cast
 
 import torch
@@ -23,7 +24,7 @@ class GenerateInput(TypedDict):
 	sequence: str
 	organism: str | None
 
-class ExInClassifierGPT(BaseModel):
+class DnaTranslatorGPT(BaseModel):
 	model: GPT2LMHeadModel | None = None
 	tokenizer: GPT2Tokenizer | None = None
 	max_length = 1024
@@ -82,6 +83,13 @@ class ExInClassifierGPT(BaseModel):
 		target = target[:target.find("*") + 1]
 		return "".join(f"[PROT_{prot.upper()}]" for prot in target if prot.upper() in valid_prot)
 	
+	def _unprocess_target(
+		self,
+		protein_tokens: str
+	) -> str:
+		matches = re.findall(r"\[PROT_([A-Z*])\]", protein_tokens.upper())
+		return "".join(matches)
+	
 	def build_input(
 		self,
 		sequence: str,
@@ -100,7 +108,7 @@ class ExInClassifierGPT(BaseModel):
 		target: str | None = None,
 		organism: str | None = None
 	) -> dict[Literal["partial", "complete"], str]:
-			output = f"<|DNA|>{sequence}"
+			output = f"<|DNA|>{self._process_sequence(sequence)}"
 
 			if organism:
 				output += f"<|ORGANISM|>{organism[:10]}"
@@ -109,7 +117,7 @@ class ExInClassifierGPT(BaseModel):
 
 			return {
 				"partial": output,
-				"complete": output+(target or "")
+				"complete": output+(self._process_target(target) if target else "")
 			}	
 
 	def _tokenize(
@@ -258,4 +266,4 @@ class ExInClassifierGPT(BaseModel):
 		start = generated_texts.find("<|PROTEIN|>")
 		protein_tokenized = generated_texts[start + len("<|PROTEINS|>"):].strip()
 		
-		return self.tokenizer.decode(protein_tokenized)
+		return self._unprocess_target(protein_tokenized)
