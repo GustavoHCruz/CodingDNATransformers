@@ -1,17 +1,17 @@
-import { ApproachEnum } from '@prisma/client';
-import { IsEnum, IsInt, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsInt, IsString } from 'class-validator';
 
-export class CreateModelDto {
+export enum DatasetType {
+  Parent = 'parentDataset',
+  Child = 'childDataset',
+}
+
+export class CreateCsvFromParentDataset {
   @IsString()
-  modelAlias: string;
+  fileAlias: string;
 
-  @IsString()
-  checkpointName: string;
-
-  @IsEnum(ApproachEnum)
-  approach: ApproachEnum;
-
-  @IsOptional()
   @IsInt()
-  parentId: number;
+  datasetId: number;
+
+  @IsEnum(DatasetType)
+  type: DatasetType = DatasetType.Parent;
 }

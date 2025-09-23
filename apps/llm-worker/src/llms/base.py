@@ -1,13 +1,11 @@
-import json
 import logging
 import os
 import random
 from abc import ABC, abstractmethod
-from datetime import datetime
+from pathlib import Path
 from typing import Literal
 
 import numpy as np
-import pandas as pd
 import torch
 from colorama import Fore, Style
 
@@ -105,7 +103,7 @@ class BaseModel(ABC):
 
 	def save_pretrained(
 		self,
-		output_path: str
+		output_path: str | Path
 	) -> None:
 		self._log(f"Attempting to save model at '{output_path}'")
 		if self.model is None or self.tokenizer is None:

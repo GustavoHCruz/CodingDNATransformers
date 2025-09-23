@@ -14,7 +14,6 @@ license = {text = "MIT"}
 distribution = false
 
 [tool.pdm.scripts]
-initialize = "python src/initialize.py"
 start = "python src/main.py"
 
 [tool.pdm.resolution]
