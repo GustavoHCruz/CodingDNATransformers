@@ -55,61 +55,43 @@ export class FeatureSequenceRepository {
     return results;
   }
 
-  async findCDS(maxLength: number, limit: number, lastId: number | null) {
-    const results = await this.prisma.featureSequence.findMany({
+  async findWithCDS(
+    dnaMaxLength: number,
+    proteinMaxLength: number,
+    limit: number,
+    lastId: number | null,
+  ) {
+    const withCDS = await this.prisma.dNASequence.findMany({
       select: {
         id: true,
         sequence: true,
-        dnaSequence: {
+        organism: true,
+        length: true,
+        features: {
           select: {
+            id: true,
             sequence: true,
-            organism: true,
+            length: true,
           },
+          orderBy: { start: 'asc' },
         },
       },
       where: {
-        type: {
-          equals: FeatureEnum.CDS,
-        },
-        id: lastId ? { gt: lastId } : undefined,
-        dnaSequence: {
-          length: { lt: maxLength },
+        ...(lastId !== null && { id: { gt: lastId } }),
+        length: { lte: dnaMaxLength },
+        features: {
+          some: {
+            type: FeatureEnum.CDS,
+            length: {
+              lte: proteinMaxLength,
+            },
+          },
         },
       },
       orderBy: { id: 'asc' },
       take: limit,
     });
 
-    return results;
-  }
-
-  async findCDSWithoutIntrons(limit: number, lastId: number | null) {
-    const results = await this.prisma.featureSequence.findMany({
-      select: {
-        id: true,
-        sequence: true,
-        start: true,
-        end: true,
-        dnaSequence: {
-          select: {
-            sequence: true,
-            organism: true,
-          },
-        },
-      },
-      where: {
-        length: {
-          lte: 880,
-        },
-        type: {
-          equals: FeatureEnum.CDS,
-        },
-        id: lastId ? { gt: lastId } : undefined,
-      },
-      orderBy: { id: 'asc' },
-      take: limit,
-    });
-
-    return results;
+    return withCDS;
   }
 }

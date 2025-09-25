@@ -13,6 +13,7 @@ import { DnaSequenceService } from '@resources/dna-sequence/dna-sequence.service
 import { FeatureSequenceService } from '@resources/feature-sequence/feature-sequence.service';
 import { GenerationBatchService } from '@resources/generation-batch/generation-batch.service';
 import { ParentDatasetService } from '@resources/parent-dataset/parent-dataset.service';
+import { CreateParentRecordDto } from '@resources/parent-record/dto/create-parent-record.dto';
 import { ParentRecordService } from '@resources/parent-record/parent-record.service';
 import { ProgressTrackerService } from '@resources/progress-tracker/progress-tracker.service';
 import {
@@ -288,11 +289,14 @@ export class DatasetGenerationService {
       })
     ).id;
 
+    const proteinMaxLength = Math.floor(maxLength / 3);
+
     let lastId: number | null = null;
     let total = 0;
     while (true) {
-      const batch = await this.FeatureSequenceService.findCDS(
+      const batch = await this.FeatureSequenceService.findWithCDS(
         maxLength,
+        proteinMaxLength,
         batchSize,
         lastId,
       );
@@ -301,106 +305,28 @@ export class DatasetGenerationService {
         break;
       }
 
-      const result = await this.parentRecordService.createMany(
-        batch.map((record) => {
-          return {
-            parentDatasetId,
-            sequence: record.dnaSequence!.sequence,
-            target: record.sequence,
-            organism: record.dnaSequence!.organism || '',
-          };
-        }),
-      );
+      const batchToCreate: CreateParentRecordDto[] = [];
+      for (const record of batch) {
+        const target = record.features.reduce(
+          (acc, feature) => (acc += feature.sequence),
+          '',
+        );
+        if (target.length > proteinMaxLength) {
+          continue;
+        }
 
-      lastId = batch[batch.length - 1].id;
-      total += result.count;
+        const sequence = record.sequence;
+        const organism = record.organism || '';
 
-      await this.progressService.postProgress(taskId, total);
-    }
-    await this.parentDatasetService.update(parentDatasetId, {
-      recordCount: total,
-    });
-    await this.progressService.finish(taskId);
-  }
-
-  async generateRawDatasetsDNATranslatorWithoutIntronFn(
-    approach: ApproachEnum,
-    modelType: ModelTypeEnum,
-    origin: OriginEnum,
-    maxLength: number,
-    batchSize: number,
-    taskId: number,
-  ) {
-    const parentDatasetId = (
-      await this.parentDatasetService.create({
-        approach,
-        modelType,
-        origin,
-        name: `${approach}-${modelType}`,
-      })
-    ).id;
-
-    let lastId: number | null = null;
-    let total = 0;
-    while (true) {
-      const batch = await this.FeatureSequenceService.findCDSWithoutIntrons(
-        batchSize,
-        lastId,
-      );
-
-      if (!batch.length) {
-        break;
+        batchToCreate.push({
+          parentDatasetId,
+          sequence: sequence,
+          target: target,
+          organism: organism,
+        });
       }
 
-      const provisory = batch.reduce(
-        (acc, record) => {
-          const length = record.end - record.start;
-          if (length < maxLength && record.dnaSequence) {
-            acc.push({
-              parentDatasetId,
-              sequence: record.dnaSequence.sequence.slice(
-                record.start,
-                record.end,
-              ),
-              target: record.sequence,
-              organism: record.dnaSequence.organism || '',
-            });
-          }
-          return acc;
-        },
-        [] as {
-          parentDatasetId: number;
-          sequence: string;
-          target: string;
-          organism: string;
-        }[],
-      );
-
-      const result = await this.parentRecordService.createMany(
-        batch.reduce(
-          (acc, record) => {
-            const length = record.end - record.start;
-            if (length < maxLength && record.dnaSequence) {
-              acc.push({
-                parentDatasetId,
-                sequence: record.dnaSequence.sequence.slice(
-                  record.start,
-                  record.end,
-                ),
-                target: record.sequence,
-                organism: record.dnaSequence.organism || '',
-              });
-            }
-            return acc;
-          },
-          [] as {
-            parentDatasetId: number;
-            sequence: string;
-            target: string;
-            organism: string;
-          }[],
-        ),
-      );
+      const result = await this.parentRecordService.createMany(batchToCreate);
 
       lastId = batch[batch.length - 1].id;
       total += result.count;
@@ -554,26 +480,6 @@ export class DatasetGenerationService {
           taskId,
         );
         response.genbank.DNATranslator!.gpt = taskId;
-      }
-      if (data.genbank.DNATranslator.alternative) {
-        const modelType = ModelTypeEnum.GPT;
-        const maxLength =
-          this.configService.getDatasetsLengths().DNATRANSLATOR.gpt;
-
-        const taskId = (
-          await this.progressService.create({
-            progressType: ProgressTypeEnum.COUNTER,
-          })
-        ).id;
-        this.generateRawDatasetsDNATranslatorWithoutIntronFn(
-          approach,
-          modelType,
-          origin,
-          maxLength,
-          batchSize,
-          taskId,
-        );
-        response.genbank.DNATranslator!.alternative = taskId;
       }
     }
     return response;

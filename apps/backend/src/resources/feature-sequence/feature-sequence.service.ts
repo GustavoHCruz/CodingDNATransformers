@@ -29,11 +29,17 @@ export class FeatureSequenceService {
     return this.repository.findExIn(maxLength, limit, lastId);
   }
 
-  findCDS(maxLength: number, limit: number, lastId: number | null) {
-    return this.repository.findCDS(maxLength, limit, lastId);
-  }
-
-  async findCDSWithoutIntrons(limit: number, lastId: number | null) {
-    return this.repository.findCDSWithoutIntrons(limit, lastId);
+  async findWithCDS(
+    limit: number,
+    dnaMaxLength: number,
+    proteinMaxLength: number,
+    lastId: number | null,
+  ) {
+    return this.repository.findWithCDS(
+      dnaMaxLength,
+      proteinMaxLength,
+      limit,
+      lastId,
+    );
   }
 }

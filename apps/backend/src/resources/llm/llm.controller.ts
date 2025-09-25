@@ -6,7 +6,7 @@ import { LlmService } from './llm.service';
 export class LlmController {
   constructor(private readonly llmService: LlmService) {}
 
-  @Post('/generateCsv')
+  @Post('/generate-csv')
   async generateCsv(@Body() data: CreateCsvFromParentDataset) {
     return this.llmService.generateCsv(data);
   }

@@ -22,7 +22,7 @@ datasets_lengths:
     bert: 2048
     dnabert: 2048
   DNATRANSLATOR:
-    gpt: 700
+    gpt: 750
 
 dataset_generation:
   batch_size: 2000

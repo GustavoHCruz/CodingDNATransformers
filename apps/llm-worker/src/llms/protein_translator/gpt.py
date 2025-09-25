@@ -28,6 +28,8 @@ class DnaTranslatorGPT(BaseModel):
 	model: GPT2LMHeadModel | None = None
 	tokenizer: GPT2Tokenizer | None = None
 	max_length = 1024
+	pad_token = "[PROT_*]"
+	eos_token = "[PROT_*]"
 
 	def load_checkpoint(
 		self,
@@ -117,7 +119,7 @@ class DnaTranslatorGPT(BaseModel):
 
 			return {
 				"partial": output,
-				"complete": output+(self._process_target(target) if target else "")
+				"complete": output+(self._process_target(target)+self.eos_token if target else "")
 			}	
 
 	def _tokenize(
