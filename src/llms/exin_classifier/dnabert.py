@@ -27,14 +27,14 @@ class ExInClassifierDNABERT(BaseModel):
 
 	def load_checkpoint(
 		self,
-		checkpoint: str = "zhihan1996/DNA_bert_6"
+		checkpoint: str
 	) -> None:
 		self.model = AutoModelForSequenceClassification.from_pretrained(checkpoint, num_labels=2)
 		self.tokenizer = AutoTokenizer.from_pretrained(checkpoint)
 
 	def from_pretrained(
 		self,
-		checkpoint: str = "zhihan1996/DNA_bert_6"
+		checkpoint: str
 	) -> None:
 		self.model = AutoModelForSequenceClassification.from_pretrained(checkpoint, num_labels=2)
 		self.tokenizer = AutoTokenizer.from_pretrained(checkpoint)
@@ -192,7 +192,7 @@ class ExInClassifierDNABERT(BaseModel):
 
 		trainer.train()
 
-		self._log("Training complete. You may save the model for later use.")
+		self._log("Training complete. You may save the model for later usage.")
 
 	def generate(
 		self,

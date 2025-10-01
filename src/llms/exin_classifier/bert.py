@@ -3,27 +3,20 @@ from typing import Literal, TypedDict, cast
 
 import torch
 from datasets import Dataset
-from llms.base import BaseModel
-from schemas.train_params import TrainParams
 from tqdm import tqdm
 from transformers import (BertForSequenceClassification, BertTokenizer,
                           DataCollatorWithPadding)
 from transformers.trainer import Trainer
 from transformers.training_args import TrainingArguments
+
+from llms.base import BaseModel
+from schemas.train_params import TrainParams
 from utils.exceptions import MissingEssentialProp
 
 
 class Input(TypedDict):
 	sequence: str
 	target: str | None
-	organism: str | None
-	gene: str | None
-	before: str | None
-	after: str | None
-	hide_prob: float | None
-
-class GenerateInput(TypedDict):
-	sequence: str
 	organism: str | None
 	gene: str | None
 	before: str | None
@@ -39,10 +32,20 @@ class ExInClassifierBERT(BaseModel):
 		self,
 		checkpoint: str
 	) -> None:
-		self.model = BertForSequenceClassification.from_pretrained(checkpoint, num_labels=2)
-		tokenizer = BertTokenizer.from_pretrained(checkpoint, do_lower_case=False)
+		self.model = BertForSequenceClassification.from_pretrained(
+			checkpoint,
+			num_labels=2
+		)
+		tokenizer = BertTokenizer.from_pretrained(
+			checkpoint,
+			do_lower_case=False
+		)
 
-		special_tokens = ["[A]", "[C]", "[G]", "[T]", "[R]", "[Y]", "[S]", "[W]", "[K]", "[M]", "[B]", "[D]", "[H]", "[V]", "[N]"]
+		special_tokens = [
+			"[A]", "[C]", "[G]", "[T]", "[R]",
+			"[Y]", "[S]", "[W]", "[K]", "[M]",
+			"[B]", "[D]", "[H]", "[V]", "[N]"
+		]
 		tokenizer.add_tokens(special_tokens)
 
 		tokenizer.add_special_tokens({
@@ -71,8 +74,13 @@ class ExInClassifierBERT(BaseModel):
 		self,
 		checkpoint: str
 	) -> None:
-		self.model = BertForSequenceClassification.from_pretrained(checkpoint)
-		self.tokenizer = BertTokenizer.from_pretrained(checkpoint)
+		self.model = BertForSequenceClassification.from_pretrained(
+			checkpoint
+		)
+		self.tokenizer = BertTokenizer.from_pretrained(
+			checkpoint,
+			num_labels=2
+		)
 
 	def _process_sequence(
 		self,
@@ -82,11 +90,11 @@ class ExInClassifierBERT(BaseModel):
 	
 	def _process_target(
 		self,
-		label: str
+		target: str
 	) -> Literal[0, 1]:
-		if label == "EXON":
+		if target == "EXON":
 			return 0
-		if label == "INTRON":
+		if target == "INTRON":
 			return 1
 		raise ValueError("Could not find a valid label.")
 	
@@ -120,39 +128,34 @@ class ExInClassifierBERT(BaseModel):
 	
 	def _build_input(
 		self,
-		sequence: str,
-		target: str | None = None,
-		organism: str | None = None,
-		gene: str | None = None,
-		before: str | None = None,
-		after: str | None = None,
+		data: Input,
 		hide_prob: float = 0.01
 	) -> tuple[str, int | None]:
-		output = f"<|SEQUENCE|>{self._process_sequence(sequence)}"
+		output = f"<|SEQUENCE|>{self._process_sequence(data["sequence"])}"
 
-		if organism:
+		if data["organism"]:
 			if random.random() > hide_prob:
-				output += f"<|ORGANISM|>{organism[:10]}"
+				output += f"<|ORGANISM|>{data["organism"][:10]}"
 
-		if gene:
+		if data["gene"]:
 			if random.random() > hide_prob:
-				output += f"<|GENE|>{gene[:10]}"
+				output += f"<|GENE|>{data["gene"][:10]}"
 		
-		if before:
-			before = self._process_sequence(before)
+		if data["before"]:
+			before = self._process_sequence(data["before"])
 			if random.random() > hide_prob:
 				output += f"<|FLANK_BEFORE|>{before}"
 		
-		if after:
-			after = self._process_sequence(after)
+		if data["after"]:
+			after = self._process_sequence(data["after"])
 			if random.random() > hide_prob:
 				output += f"<|FLANK_AFTER|>{after}"
 		
 		output += "<|TARGET|>"
 
 		label = None
-		if target:
-			label = self._process_target(target)
+		if data["target"]:
+			label = self._process_target(data["target"])
 
 		return output, label 
 	
@@ -202,15 +205,7 @@ class ExInClassifierBERT(BaseModel):
 		tokenized = []
 
 		for data in tqdm(dataset):
-			sentence, target = self._build_input(
-				sequence=data["sequence"],
-				target=data.get("target"),
-				organism=data.get("organism", ""),
-				gene=data.get("gene", ""),
-				before=data.get("before", ""),
-				after=data.get("after", ""),
-				hide_prob=data.get("hide_prob") or 0.01
-			)
+			sentence, target = self._build_input(data)
 
 			if target is None:
 				raise ValueError("Target is missing.")
@@ -258,30 +253,23 @@ class ExInClassifierBERT(BaseModel):
 			model=self.model,
 			train_dataset=data,
 			args=args,
-			data_collator=DataCollatorWithPadding(self.tokenizer),
+			data_collator=DataCollatorWithPadding(self.tokenizer)
 		)
 
 		self._log("Starting training...")
 
 		trainer.train()
 
-		self._log("Training complete. You may save the model for later use.")
+		self._log("Training complete. You may save the model for later usage.")
 
 	def generate(
 		self,
-		input: GenerateInput
+		data: Input
 	) -> str:
 		if self.model is None or self.tokenizer is None:
 			raise MissingEssentialProp("Model or Tokenizer missing.")
 		
-		sentence, _ = self._build_input(
-			sequence=input["sequence"],
-			organism=input.get("organism"),
-			gene=input.get("gene"),
-			before=input.get("before"),
-			after=input.get("after"),
-			hide_prob=input.get("hide_prob") or 0.01
-		)
+		sentence, _ = self._build_input(data)
 
 		input_ids, _ = self._tokenize(sentence)
 

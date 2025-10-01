@@ -3,12 +3,13 @@ from typing import Literal, TypedDict, cast
 
 import torch
 from datasets import Dataset
-from llms.base import BaseModel
-from schemas.train_params import TrainParams
 from tqdm import tqdm
 from transformers.models.gpt2 import GPT2LMHeadModel, GPT2Tokenizer
 from transformers.trainer import Trainer
 from transformers.training_args import TrainingArguments
+
+from llms.base import BaseModel
+from schemas.train_params import TrainParams
 from utils.data_collators import DataCollatorForFT
 from utils.exceptions import MissingEssentialProp
 
@@ -40,7 +41,17 @@ class DnaTranslatorGPT(BaseModel):
 		tokenizer = GPT2Tokenizer.from_pretrained(checkpoint)
 		tokenizer.pad_token = tokenizer.eos_token
 
-		special_tokens = ["[DNA_A]", "[DNA_C]", "[DNA_G]", "[DNA_T]", "[DNA_R]", "[DNA_Y]", "[DNA_S]", "[DNA_W]", "[DNA_K]", "[DNA_M]", "[DNA_B]", "[DNA_D]", "[DNA_H]", "[DNA_V]", "[DNA_N]", "[PROT_A]", "[PROT_C]", "[PROT_D]", "[PROT_E]", "[PROT_F]", "[PROT_G]", "[PROT_H]", "[PROT_I]", "[PROT_K]", "[PROT_L]", "[PROT_M]", "[PROT_N]", "[PROT_P]", "[PROT_Q]", "[PROT_R]", "[PROT_S]", "[PROT_T]", "[PROT_V]", "[PROT_W]", "[PROT_Y]", "[PROT_*]", "[PROT_X]"]
+		special_tokens = [
+			"[DNA_A]", "[DNA_C]", "[DNA_G]", "[DNA_T]", "[DNA_R]",
+			"[DNA_Y]", "[DNA_S]", "[DNA_W]", "[DNA_K]", "[DNA_M]",
+			"[DNA_B]", "[DNA_D]", "[DNA_H]", "[DNA_V]", "[DNA_N]", 
+			"[PROT_A]", "[PROT_C]", "[PROT_D]", "[PROT_E]",
+			"[PROT_F]", "[PROT_G]", "[PROT_H]", "[PROT_I]",
+			"[PROT_K]", "[PROT_L]", "[PROT_M]", "[PROT_N]",
+			"[PROT_P]", "[PROT_Q]", "[PROT_R]", "[PROT_S]",
+			"[PROT_T]", "[PROT_V]", "[PROT_W]", "[PROT_Y]",
+			"[PROT_*]", "[PROT_X]"
+		]
 		tokenizer.add_tokens(special_tokens)
 		
 		tokenizer.pad_token = "[PROT_*]"
@@ -233,7 +244,7 @@ class DnaTranslatorGPT(BaseModel):
 
 		trainer.train()
 
-		self._log("Training complete. You may save the model for later use.")
+		self._log("Training complete. You may save the model for later usage.")
 
 	def generate(
 		self,
