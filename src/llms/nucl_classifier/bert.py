@@ -1,12 +1,9 @@
-import time
+import random
+from collections import defaultdict
 from typing import TypedDict, cast
 
 import torch
-from accelerate import Accelerator
 from datasets import Dataset
-from numpy import squeeze
-from torch.optim import AdamW
-from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import (BertForSequenceClassification, BertTokenizer,
                           DataCollatorWithPadding, Trainer, TrainingArguments)
@@ -44,7 +41,9 @@ NUCLEOTIDE_MAP = {
 
 class NuclBERT(BaseModel):
 	max_length = 512
-	flank_size = 64
+	flank_size = 16
+	records_per_sequence = 50
+	num_labels = 3
 	
 	def load_checkpoint(
 		self,
@@ -52,7 +51,7 @@ class NuclBERT(BaseModel):
 	) -> None:
 		self.model = BertForSequenceClassification.from_pretrained(
 			checkpoint,
-			num_labels=3
+			num_labels=self.num_labels
 		)
 
 		self.tokenizer = BertTokenizer.from_pretrained(
@@ -149,11 +148,11 @@ class NuclBERT(BaseModel):
 		
 		output += f"<|FLANK_AFTER|>{self._process_sequence(flank_after)}"
 		
-		output += f"<|PREDICTED_BEFORE|>{self._process_sequence
-		(predicted_before)}"
+		#output += f"<|PREDICTED_BEFORE|>{self._process_sequence
+		#(predicted_before)}"
 		
 		if organism:
-			output += f"<|ORGANISM|>{organism[:10]}"
+			output += f"<|ORGANISM|>{organism[:10].lower()}"
 		
 		output += "<|TARGET|>"
 
@@ -209,7 +208,8 @@ class NuclBERT(BaseModel):
 		self,
 		data: list[Input]
 	) -> Dataset:
-		tokenized = []
+		tokenized_dataset = []
+		per_class = max(1, self.records_per_sequence // self.num_labels)
 		
 		for register in tqdm(data):
 			sequence = register["sequence"]
@@ -219,17 +219,27 @@ class NuclBERT(BaseModel):
 			if target == None:
 				raise MissingEssentialProp("Target missing")
 
-			for i, nucl in enumerate(sequence):	
+			class_counts = defaultdict(int)
+
+			indices = list(range(len(sequence)))
+			random.shuffle(indices)
+
+			for i in indices:
+				cropped_target = target[i]
+				label = self._process_target(cropped_target)
+
+				if class_counts[label] >= per_class:
+					continue
+
 				flank_start = max(i - self.flank_size, 0)
 				flank_end = min(i + self.flank_size, len(sequence))
 				
 				flank_before = sequence[flank_start:i]
 				flank_after = sequence[i+1:flank_end]
 				predicted_before = target[flank_start:i]
-				cropped_target = target[i]
 				
-				sentence, label = self._build_input(
-					sequence=nucl,
+				sentence, label_id = self._build_input(
+					sequence=sequence[i],
 					flank_before=flank_before,
 					flank_after=flank_after,
 					predicted_before=predicted_before,
@@ -237,21 +247,27 @@ class NuclBERT(BaseModel):
 					organism=organism
 				)
 
-				assert label is not None
+				assert label_id is not None
 
 				tokenized_input = self._tokenize_for_training(
 					sentence=sentence,
-					target=label
+					target=label_id
 				)
 
 				input_ids, attention_mask, labels = tokenized_input
-				tokenized.append({
+
+				tokenized_dataset.append({
 					"input_ids": input_ids,
 					"attention_mask": attention_mask,
 					"labels": labels
 				})
 
-		return Dataset.from_list(tokenized)
+				class_counts[label] += 1
+
+				if all(class_counts[c] >= per_class for c in range(self.num_labels)):
+					break
+
+		return Dataset.from_list(tokenized_dataset)
 
 	def train(
 		self,

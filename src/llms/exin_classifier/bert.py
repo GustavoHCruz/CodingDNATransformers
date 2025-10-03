@@ -135,11 +135,11 @@ class ExInClassifierBERT(BaseModel):
 
 		if data["organism"]:
 			if random.random() > hide_prob:
-				output += f"<|ORGANISM|>{data["organism"][:10]}"
+				output += f"<|ORGANISM|>{data["organism"][:10].lower()}"
 
 		if data["gene"]:
 			if random.random() > hide_prob:
-				output += f"<|GENE|>{data["gene"][:10]}"
+				output += f"<|GENE|>{data["gene"][:10].lower()}"
 		
 		if data["before"]:
 			before = self._process_sequence(data["before"])
