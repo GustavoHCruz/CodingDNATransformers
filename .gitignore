@@ -1,9 +1,15 @@
-!/storage/models/.gitkeep
-/storage/models
+/src/storage/models/base/*
+!/src/storage/models/base/.gitkeep
+/src/storage/models/tuned/*
+!/src/storage/models/tuned/.gitkeep
 *.gb
 *.fa
 *.gtf
 *.pyc
 .vscode
 *.csv
+__pycache__
 .env
+.venv
+.pdm-python
+trainer_output
