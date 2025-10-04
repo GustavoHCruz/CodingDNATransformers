@@ -1,5 +1,6 @@
 /src/storage/models/base/*
 !/src/storage/models/base/.gitkeep
+/src/storage/models/tuned/*
 !/src/storage/models/tuned/.gitkeep
 *.gb
 *.fa
