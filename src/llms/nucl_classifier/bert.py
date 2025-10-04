@@ -138,7 +138,6 @@ class NuclBERT(BaseModel):
 		sequence: str,
 		flank_before: str,
 		flank_after: str,
-		predicted_before: str,
 		target: str | None = None,
 		organism: str | None = None
 	) -> tuple[str, int | None]:
@@ -147,9 +146,6 @@ class NuclBERT(BaseModel):
 		output += f"<|FLANK_BEFORE|>{self._process_sequence(flank_before)}"
 		
 		output += f"<|FLANK_AFTER|>{self._process_sequence(flank_after)}"
-		
-		#output += f"<|PREDICTED_BEFORE|>{self._process_sequence
-		#(predicted_before)}"
 		
 		if organism:
 			output += f"<|ORGANISM|>{organism[:10].lower()}"
@@ -236,13 +232,11 @@ class NuclBERT(BaseModel):
 				
 				flank_before = sequence[flank_start:i]
 				flank_after = sequence[i+1:flank_end]
-				predicted_before = target[flank_start:i]
 				
 				sentence, label_id = self._build_input(
 					sequence=sequence[i],
 					flank_before=flank_before,
 					flank_after=flank_after,
-					predicted_before=predicted_before,
 					target=cropped_target,
 					organism=organism
 				)
@@ -336,7 +330,6 @@ class NuclBERT(BaseModel):
 					sequence=nucl,
 					flank_before=flank_before,
 					flank_after=flank_after,
-					predicted_before=predicted,
 					organism=organism
 				)
 
