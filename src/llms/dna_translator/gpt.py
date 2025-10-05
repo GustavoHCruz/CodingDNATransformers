@@ -16,13 +16,16 @@ from utils.exceptions import MissingEssentialProp
 valid_dna = set("ACGTURYSWKMBDHVN")
 valid_prot = set("ACDEFGHIKLMNPQRSTVWY*X")
 
-class Input(TypedDict):
-	sequence: str
-	target: str | None
+class PreTrainInput(TypedDict):
+	protein_sequence: str
+
+class FineTuneInput(TypedDict):
+	dna_sequence: str
+	protein_sequence: str | None
 	organism: str | None
 
 class GenerateInput(TypedDict):
-	sequence: str
+	dna_sequence: str
 	organism: str | None
 
 class DnaTranslatorGPT(BaseModel):
@@ -82,19 +85,19 @@ class DnaTranslatorGPT(BaseModel):
 		self.model = GPT2LMHeadModel.from_pretrained(checkpoint)
 		self.tokenizer = GPT2Tokenizer.from_pretrained(checkpoint)
 
-	def _process_sequence(
+	def _process_dna_sequence(
 		self,
-		sequence: str
+		dna_sequence: str
 	) -> str:
-		return "".join(f"[DNA_{nucl.upper()}]" for nucl in sequence if nucl.upper() in valid_dna)
+		return "".join(f"[DNA_{nucl.upper()}]" for nucl in dna_sequence if nucl.upper() in valid_dna)
 
-	def _process_target(
+	def _process_protein_sequence(
 		self,
-		target: str
+		protein_sequence: str
 	) -> str:
-		target = target + "*"
-		target = target[:target.find("*") + 1]
-		return "".join(f"[PROT_{prot.upper()}]" for prot in target if prot.upper() in valid_prot)
+		result = protein_sequence + "*"
+		result += protein_sequence[:protein_sequence.find("*") + 1]
+		return "".join(f"[PROT_{prot.upper()}]" for prot in result if prot.upper() in valid_prot)
 	
 	def _unprocess_target(
 		self,
@@ -103,15 +106,23 @@ class DnaTranslatorGPT(BaseModel):
 		matches = re.findall(r"\[PROT_([A-Z*])\]", protein_tokens.upper())
 		return "".join(matches)
 	
-	def build_input(
+	def build_input_for_pretrain(
 		self,
-		sequence: str,
-		target: str | None = None,
-		organism: str | None = None
-	) -> Input:
+		protein_sequence: str
+	) -> PreTrainInput:
 		return {
-			"sequence": sequence,
-			"target": target,
+			"protein_sequence": protein_sequence
+		}
+
+	def build_input_for_finetune(
+		self,
+		dna_sequence: str,
+		protein_sequence: str | None = None,
+		organism: str | None = None
+	) -> FineTuneInput:
+		return {
+			"dna_sequence": dna_sequence,
+			"protein_sequence": protein_sequence,
 			"organism": organism
 		}
 	
@@ -121,7 +132,7 @@ class DnaTranslatorGPT(BaseModel):
 		target: str | None = None,
 		organism: str | None = None
 	) -> dict[Literal["partial", "complete"], str]:
-			output = f"<|DNA|>{self._process_sequence(sequence)}"
+			output = f"<|DNA|>{self._process_dna_sequence(sequence)}"
 
 			if organism:
 				output += f"<|ORGANISM|>{organism[:10]}"
@@ -130,7 +141,7 @@ class DnaTranslatorGPT(BaseModel):
 
 			return {
 				"partial": output,
-				"complete": output+(self._process_target(target)+self.eos_token if target else "")
+				"complete": output+(self._process_protein_sequence(target)+self.eos_token if target else "")
 			}	
 
 	def _tokenize(
@@ -154,7 +165,21 @@ class DnaTranslatorGPT(BaseModel):
 
 		return (input_ids, attention_mask)
 
-	def _tokenize_for_training(
+	def _tokenize_for_pretrain(
+		self,
+		input_text	
+	) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+		assert self.tokenizer is not None
+
+		encoded_input = self.tokenizer(input_text)
+		
+		input_ids = torch.tensor(encoded_input["input_ids"], dtype=torch.long)
+		attention_mask = torch.tensor(encoded_input["attention_mask"], dtype=torch.bool)
+		labels = input_ids.clone()
+
+		return input_ids, attention_mask, labels	
+
+	def _tokenize_for_finetune(
 		self,
 		input_text: str,
 		expected_text: str
@@ -182,19 +207,39 @@ class DnaTranslatorGPT(BaseModel):
 		
 		return input_ids, attention_mask, labels
 
-	def _prepare_dataset(
+	def _prepare_dataset_for_pretrain(
 		self,
-		dataset: list[Input]
+		dataset: list[PreTrainInput]
+	) -> Dataset:
+		assert self.tokenizer is not None
+		
+		tokenized = []
+		for data in tqdm(dataset):
+			processed = self._process_protein_sequence(data["protein_sequence"])
+			processed += str(self.tokenizer.eos_token)
+			input_ids, attention_mask, labels = self._tokenize_for_pretrain(processed)
+
+			tokenized.append({
+				"input_ids": input_ids,
+				"attention_mask": attention_mask,
+				"labels": labels
+			})
+		
+		return Dataset.from_list(tokenized)
+
+	def _prepare_dataset_for_finetune(
+		self,
+		dataset: list[FineTuneInput]
 	) -> Dataset:
 		tokenized = []
 
 		for data in tqdm(dataset):
 			promptfied = self._build_input(
-				sequence=data["sequence"],
-				target=data.get("target"),
+				sequence=data["dna_sequence"],
+				target=data.get("protein_sequence"),
 				organism=data.get("organism", "")
 			)
-			tokenized_input = self._tokenize_for_training(
+			tokenized_input = self._tokenize_for_finetune(
 				input_text=promptfied["partial"],
 				expected_text=promptfied["complete"]
 			)
@@ -208,16 +253,16 @@ class DnaTranslatorGPT(BaseModel):
 
 		return Dataset.from_list(tokenized)
 
-	def train(
+	def pretrain(
 		self,
-		dataset: list[Input],
+		dataset: list[PreTrainInput],
 		params: TrainParams
 	) -> None:
 		if not self.model or not self.tokenizer:
 			raise MissingEssentialProp("Model or Tokenizer missing.")
 		
 		self._log("Preparing dataset...")
-		data = self._prepare_dataset(dataset)
+		data = self._prepare_dataset_for_pretrain(dataset)
 		self._log("Dataset prepared!")
 
 		args = TrainingArguments(
@@ -227,7 +272,45 @@ class DnaTranslatorGPT(BaseModel):
 			per_device_train_batch_size=params.batch_size,
 			gradient_accumulation_steps=params.gradient_accumulation,
 			lr_scheduler_type="cosine",
-			save_strategy="no",
+			save_strategy="no"
+		)
+
+		if self.seed:
+			args.seed = self.seed
+		
+		trainer = Trainer(
+			model=self.model,
+			train_dataset=data,
+			args=args,
+			data_collator=DataCollatorForFT(self.tokenizer)
+		)
+
+		self._log("Starting training...")
+
+		trainer.train()
+
+		self._log("Training complete. You may save the model for later usage.")
+
+	def finetune(
+		self,
+		dataset: list[FineTuneInput],
+		params: TrainParams
+	) -> None:
+		if not self.model or not self.tokenizer:
+			raise MissingEssentialProp("Model or Tokenizer missing.")
+		
+		self._log("Preparing dataset...")
+		data = self._prepare_dataset_for_finetune(dataset)
+		self._log("Dataset prepared!")
+
+		args = TrainingArguments(
+			num_train_epochs=params.epochs,
+			optim=params.optim,
+			learning_rate=params.lr,
+			per_device_train_batch_size=params.batch_size,
+			gradient_accumulation_steps=params.gradient_accumulation,
+			lr_scheduler_type="cosine",
+			save_strategy="no"
 		)
 
 		if self.seed:
@@ -254,7 +337,7 @@ class DnaTranslatorGPT(BaseModel):
 			raise MissingEssentialProp("Model or Tokenizer missing.")
 		
 		model_input = self._build_input(
-			sequence=input["sequence"],
+			sequence=input["dna_sequence"],
 			organism=input.get("organism")
 		)
 
