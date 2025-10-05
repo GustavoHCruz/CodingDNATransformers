@@ -12,8 +12,8 @@ download_info = [
     "local_dir": folder + "bert"
   },
   {
-    "model_id": "zhihan1996/DNA_bert_6",
-    "local_dir": folder + "dnabert"
+    "model_id": "zhihan1996/DNABERT-2-117M",
+    "local_dir": folder + "dnabert2"
   }
 ]
 
