@@ -43,15 +43,7 @@ class ExInClassifierDNABERT(BaseModel):
 		self,
 		sequence: str
 	) -> str:
-		k = 6
-
-		remain = len(sequence) % k
-		if remain != 0:
-			padding_len = k - remain
-			sequence += 'N' * padding_len
-
-		k_mers = [sequence[i:i+k] for i in range(0, len(sequence), k)]
-		return " ".join(k_mers)
+		return sequence
 	
 	def _process_target(
 		self,
@@ -82,13 +74,11 @@ class ExInClassifierDNABERT(BaseModel):
 		sequence: str,
 		target: str | None = None
 	) -> tuple[str, int | None]:
-		output = self._process_sequence(sequence)
-
 		label = None
 		if target:
 			label = self._process_target(target)
 		
-		return output, label
+		return sequence, label
 	
 	def _tokenize(
 		self,
