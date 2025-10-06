@@ -42,7 +42,7 @@ NUCLEOTIDE_MAP = {
 class NuclBERT(BaseModel):
 	max_length = 512
 	flank_size = 16
-	records_per_sequence = 50
+	records_per_sequence = 250
 	num_labels = 3
 	
 	def load_checkpoint(

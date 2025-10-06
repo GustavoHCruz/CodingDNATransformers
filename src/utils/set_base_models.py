@@ -1,6 +1,6 @@
 from huggingface_hub import snapshot_download
 
-folder = "src/storage/models/base"
+folder = "src/storage/models/base/"
 
 download_info = [
   {
