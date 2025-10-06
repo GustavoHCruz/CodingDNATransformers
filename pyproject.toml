@@ -10,6 +10,7 @@ dependencies = [
     "colorama>=0.4.6",
     "datasets>=3.6.0",
     "editdistance>=0.8.1",
+    "einops>=0.8.1",
     "hf-xet>=1.1.5",
     "huggingface-hub>=0.34.4",
     "pandas>=2.3.1",
