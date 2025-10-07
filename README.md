@@ -6,7 +6,7 @@ The project is entirely developed in Python and leverages state-of-the-art **tra
 
 The contribution of this work is as fallows:
 
-- Achieved **2nd place** at a national event in Fortaleza, Ceará, Brazil - [Symposium on Knowledge Discovery, Mining and Learning (KDMiLe) - SBC](link_here).
+- Achieved **2nd place** at a national event in Fortaleza, Ceará, Brazil - [Symposium on Knowledge Discovery, Mining and Learning (KDMiLe) - SBC](https://doi.org/10.5753/kdmile.2025.247575).
 - Later accepted for publication in Athens, Greece, on [International Conference on BioInformatics and BioEngineering (BIBE) - IEEE]().
 
 ---
