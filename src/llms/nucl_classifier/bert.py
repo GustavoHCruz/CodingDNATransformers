@@ -282,7 +282,8 @@ class NuclBERT(BaseModel):
 			per_device_eval_batch_size=params.batch_size,
 			gradient_accumulation_steps=params.gradient_accumulation,
 			lr_scheduler_type="cosine",
-			save_strategy="no"
+			save_strategy="no",
+			logging_steps=params.logging_steps
 		)
 
 		if self.seed:

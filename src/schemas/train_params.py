@@ -12,3 +12,4 @@ class TrainParams:
     "adamw_torch",
     "sgd",
   ] = "adamw_torch"
+  logging_steps: int = 2000

@@ -3,12 +3,13 @@ from typing import Literal, TypedDict, cast
 
 import torch
 from datasets import Dataset
-from llms.base import BaseModel
-from schemas.train_params import TrainParams
 from tqdm import tqdm
 from transformers.models.gpt2 import GPT2LMHeadModel, GPT2Tokenizer
 from transformers.trainer import Trainer
 from transformers.training_args import TrainingArguments
+
+from llms.base import BaseModel
+from schemas.train_params import TrainParams
 from utils.data_collators import DataCollatorForFT
 from utils.exceptions import MissingEssentialProp
 
@@ -250,6 +251,7 @@ class ExInClassifierGPT(BaseModel):
 			gradient_accumulation_steps=params.gradient_accumulation,
 			lr_scheduler_type="cosine",
 			save_strategy="no",
+			logging_steps=params.logging_steps
 		)
 
 		if self.seed:

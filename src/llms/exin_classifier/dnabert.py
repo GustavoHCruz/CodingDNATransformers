@@ -166,6 +166,7 @@ class ExInClassifierDNABERT(BaseModel):
 			gradient_accumulation_steps=params.gradient_accumulation,
 			lr_scheduler_type="cosine",
 			save_strategy="no",
+			logging_steps=params.logging_steps
 		)
 
 		if self.seed:
