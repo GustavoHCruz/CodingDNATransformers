@@ -23,7 +23,7 @@ Each section describes the models, expected input/output format, and examples.
 The model receives an entire DNA sequence and classifies it as **coding (exon)** or **non-coding (intron)**.  
 Additional metadata (organism, gene name, flanking regions) can be included probabilistically to enrich the context.
 
-- **Models used:** GPT-2, BERT, DNABERT
+- **Models used:** [GPT-2](https://huggingface.co/openai-community/gpt2), [BERT](https://huggingface.co/google-bert/bert-base-uncased), [DNABERT2](https://huggingface.co/zhihan1996/DNABERT-2-117M)
 
 #### Input/Output Format (GPT and BERT)
 
@@ -47,7 +47,7 @@ Additional metadata (organism, gene name, flanking regions) can be included prob
 Uses a sliding window of 1 nucleotide to classify each position in a DNA sequence as Intron (I), Exon (E), or Unknown/Uncertain (U).
 This enables fine-grained annotation across long DNA sequences.
 
-- Models used: BERT
+- Models used: [BERT](https://huggingface.co/google-bert/bert-base-uncased)
 
 #### Input/Output Format
 
@@ -70,7 +70,7 @@ The model translates DNA sequences directly into their corresponding protein seq
 
 Organism metadata can optionally be provided.
 
-- Models used: GPT-2
+- Models used: [GPT-2](https://huggingface.co/openai-community/gpt2)
 
 #### Input/Output Format
 
