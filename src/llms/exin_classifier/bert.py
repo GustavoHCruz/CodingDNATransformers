@@ -54,8 +54,7 @@ class ExInClassifierBERT(BaseModel):
 				"<|ORGANISM|>",
 				"<|GENE|>",
 				"<|FLANK_BEFORE|>",
-				"<|FLANK_AFTER|>",
-				"<|TARGET|>"
+				"<|FLANK_AFTER|>"
 			]
 		})
 
@@ -150,8 +149,6 @@ class ExInClassifierBERT(BaseModel):
 			after = self._process_sequence(data["after"])
 			if random.random() > hide_prob:
 				output += f"<|FLANK_AFTER|>{after}"
-		
-		output += "<|TARGET|>"
 
 		label = None
 		if data["target"]:

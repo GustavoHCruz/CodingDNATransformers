@@ -139,7 +139,7 @@ Each one of the trained models will be published on Hugging Face:
 - **Full DNA Sequence Classification:**
   - [GPT-2](link_here)
   - [BERT](link_here)
-  - [DNABERT](link_here)
+  - [DNABERT2](link_here)
 - **Sliding Window Nucleotide CLassification:**
   - [BERT](link_here)
 - **Direct DNA-to-Protein Translation Dataset:**
