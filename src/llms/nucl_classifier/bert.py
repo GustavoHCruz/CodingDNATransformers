@@ -1,5 +1,4 @@
 import random
-from collections import defaultdict
 from typing import TypedDict, cast
 
 import torch
@@ -41,8 +40,7 @@ NUCLEOTIDE_MAP = {
 
 class NuclBERT(BaseModel):
 	max_length = 512
-	flank_size = 16
-	records_per_sequence = 250
+	flank_size = 24
 	num_labels = 3
 	
 	def load_checkpoint(
@@ -78,6 +76,10 @@ class NuclBERT(BaseModel):
 				"<|TARGET|>"
 			]
 		})
+
+		self.tokenizer.pad_token = "[DNA_PAD]"
+		self.tokenizer.add_eos_token = True
+		self.tokenizer.eos_token = "[DNA_PAD]"
 
 		self.model.resize_token_embeddings(len(self.tokenizer), mean_resizing=False)
 
@@ -204,9 +206,7 @@ class NuclBERT(BaseModel):
 		self,
 		data: list[Input]
 	) -> Dataset:
-		tokenized_dataset = []
-		per_class = max(1, self.records_per_sequence // self.num_labels)
-		
+		dataset = []
 		for register in tqdm(data):
 			sequence = register["sequence"]
 			target = register["target"]
@@ -215,17 +215,12 @@ class NuclBERT(BaseModel):
 			if target == None:
 				raise MissingEssentialProp("Target missing")
 
-			class_counts = defaultdict(int)
 
 			indices = list(range(len(sequence)))
 			random.shuffle(indices)
 
 			for i in indices:
 				cropped_target = target[i]
-				label = self._process_target(cropped_target)
-
-				if class_counts[label] >= per_class:
-					continue
 
 				flank_start = max(i - self.flank_size, 0)
 				flank_end = min(i + self.flank_size, len(sequence))
@@ -243,25 +238,20 @@ class NuclBERT(BaseModel):
 
 				assert label_id is not None
 
-				tokenized_input = self._tokenize_for_training(
+				input_ids, attention_mask, labels = self._tokenize_for_training(
 					sentence=sentence,
 					target=label_id
 				)
 
-				input_ids, attention_mask, labels = tokenized_input
-
-				tokenized_dataset.append({
+				sample = {
 					"input_ids": input_ids,
 					"attention_mask": attention_mask,
 					"labels": labels
-				})
+				}
 
-				class_counts[label] += 1
+				dataset.append(sample)
 
-				if all(class_counts[c] >= per_class for c in range(self.num_labels)):
-					break
-
-		return Dataset.from_list(tokenized_dataset)
+		return Dataset.from_list(dataset)
 
 	def train(
 		self,
@@ -279,7 +269,7 @@ class NuclBERT(BaseModel):
 			num_train_epochs=params.epochs,
 			optim=params.optim,
 			learning_rate=params.lr,
-			per_device_eval_batch_size=params.batch_size,
+			per_device_train_batch_size=params.batch_size,
 			gradient_accumulation_steps=params.gradient_accumulation,
 			lr_scheduler_type="cosine",
 			save_strategy="no",
@@ -323,9 +313,6 @@ class NuclBERT(BaseModel):
 				
 				flank_before = sequence[flank_start:i]
 				flank_after = sequence[i+1:flank_end]
-				
-				flank_before = self._process_sequence(flank_before)
-				flank_after = self._process_sequence(flank_after)
 
 				sentence, _ = self._build_input(
 					sequence=nucl,
