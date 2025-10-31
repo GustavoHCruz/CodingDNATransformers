@@ -29,7 +29,11 @@ class ExInClassifierDNABERT(BaseModel):
 		self,
 		checkpoint: str
 	) -> None:
-		self.model = AutoModelForSequenceClassification.from_pretrained(checkpoint, num_labels=2, trust_remote_code=True)
+		self.model = AutoModelForSequenceClassification.from_pretrained(
+			checkpoint,
+			num_labels=2,
+			trust_remote_code=True
+		)
 		self.tokenizer = AutoTokenizer.from_pretrained(checkpoint)
 
 	def from_pretrained(

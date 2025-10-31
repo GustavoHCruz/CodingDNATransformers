@@ -15,30 +15,13 @@ from utils.exceptions import MissingEssentialProp
 class Input(TypedDict):
 	sequence: str
 	target: str | None
-	organism: str | None
 
-NUCLEOTIDE_MAP = {
-	"A": "[DNA_A]",
-	"C": "[DNA_C]",
-	"G": "[DNA_G]",
-	"T": "[DNA_T]",
-	"R": "[DNA_R]",
-	"Y": "[DNA_Y]",
-	"S": "[DNA_S]",
-	"W": "[DNA_W]",
-	"K": "[DNA_K]",
-	"M": "[DNA_M]",
-	"B": "[DNA_B]",
-	"D": "[DNA_D]",
-	"H": "[DNA_H]",
-	"V": "[DNA_V]",
-	"N": "[DNA_N]",
-	"I": "[INTRON]",
-	"E": "[EXON]",
-	"U": "[DNA_UNKNOWN]"
-}
+class GenerateInput(TypedDict):
+	sequence: str 
 
-class NuclBERT(BaseModel):
+class NuclDNABERT(BaseModel):
+	model = None
+	tokenizer = None
 	num_labels = 3
 
 	def __init__(
@@ -47,10 +30,8 @@ class NuclBERT(BaseModel):
 		log_level="INFO",
 		seed: int | None = None,
 		max_length: int = 512,
-		flank_size: int = 24,
 	) -> None:
 		self.max_length = max_length
-		self.flank_size = flank_size
 
 		super().__init__(
 			checkpoint=checkpoint,
@@ -64,61 +45,31 @@ class NuclBERT(BaseModel):
 	) -> None:
 		self.model = BertForSequenceClassification.from_pretrained(
 			checkpoint,
-			num_labels=self.num_labels
+			num_labels=self.num_labels,
+			trust_remote_code=True
 		)
-
-		self.tokenizer = BertTokenizer.from_pretrained(
-			checkpoint,
-			do_lower_case=False
-		)
-
-		special_tokens = [
-			"[DNA_A]", "[DNA_C]", "[DNA_G]", "[DNA_T]",
-			"[DNA_R]", "[DNA_Y]", "[DNA_S]", "[DNA_W]",
-			"[DNA_K]", "[DNA_M]", "[DNA_B]", "[DNA_D]",
-			"[DNA_H]", "[DNA_V]", "[DNA_N]", "[INTRON]",
-			"[EXON]", "[DNA_PAD]", "[DNA_UNKNOWN]", "[DNA_INVALID]"]
-		self.tokenizer.add_tokens(special_tokens)
-
-		self.tokenizer.add_special_tokens({
-			"additional_special_tokens": [
-				"<|SEQUENCE|>",
-				"<|ORGANISM|>",
-				"<|GENE|>",
-				"<|FLANK_BEFORE|>",
-				"<|FLANK_AFTER|>",
-				"<|PREDICTED_BEFORE|>",
-				"<|TARGET|>"
-			]
-		})
-
-		self.tokenizer.pad_token = "[DNA_PAD]"
-		self.tokenizer.add_eos_token = True
-		self.tokenizer.eos_token = "[DNA_PAD]"
-
-		self.model.resize_token_embeddings(len(self.tokenizer), mean_resizing=False)
+		self.tokenizer = BertTokenizer.from_pretrained(checkpoint)
 
 	def from_pretrained(
 		self,
 		checkpoint: str
 	) -> None:
-		self.model = BertForSequenceClassification.from_pretrained(checkpoint)
+		self.model = BertForSequenceClassification.from_pretrained(
+			checkpoint,
+			num_labels=self.num_labels
+		)
 		self.tokenizer = BertTokenizer.from_pretrained(checkpoint)
 	
 	def _process_sequence(
 		self,
 		sequence: str
 	) -> str:
-		result = []
-		for nucl in sequence.upper():
-			token = NUCLEOTIDE_MAP.get(nucl, "[DNA_INVALID]")
-			result.append(token)
-		return "".join(result)
+		return sequence
 	
 	def _process_target(
 		self,
 		target: str
-	 ) -> int:
+	) -> int:
 		if target == "E":
 			return 0
 		if target == "I":
@@ -132,22 +83,20 @@ class NuclBERT(BaseModel):
 		target: int
 	) -> str:
 		if target == 0:
-			return "[EXON]"
+			return "E"
 		elif target == 1:
-			return "[INTRON]"
+			return "I"
 		else:
-			return "[DNA_UNKNOWN]"
+			return "U"
 
 	def build_input(
 		self,
 		sequence: str,
-		target: str | None = None,
-		organism: str | None = None
+		target: str | None = None
 	) -> Input:
 		return {
 			"sequence": sequence,
-			"target": target,
-			"organism": organism
+			"target": target
 		}
 
 	def _build_input(
@@ -155,9 +104,21 @@ class NuclBERT(BaseModel):
 		sequence: str,
 		flank_before: str,
 		flank_after: str,
-		target: str | None = None,
-		organism: str | None = None
+		target: str | None = None
 	) -> tuple[str, int | None]:
+		processed_sequence = (
+			f"{self._process_sequence(flank_before)}[SEP]"
+			f"{self._process_sequence(sequence)}[SEP]"
+		)
+		processed_sequence += self._process_sequence(sequence)
+		processed_sequence += self._process_sequence(flank_after)
+
+		return {
+			"sequence": sequence,
+			"target": target
+		}
+	
+
 		output = f"<|SEQUENCE|>{self._process_sequence(sequence)}"
 		
 		output += f"<|FLANK_BEFORE|>{self._process_sequence(flank_before)}"
