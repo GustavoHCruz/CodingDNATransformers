@@ -4,7 +4,7 @@ from typing import TypedDict, cast
 import torch
 from datasets import Dataset
 from tqdm import tqdm
-from transformers import (BertForSequenceClassification, BertTokenizer,
+from transformers import (AutoModelForSequenceClassification, AutoTokenizer,
                           DataCollatorWithPadding, Trainer, TrainingArguments)
 
 from llms.base import BaseModel
@@ -30,8 +30,10 @@ class NuclDNABERT(BaseModel):
 		log_level="INFO",
 		seed: int | None = None,
 		max_length: int = 512,
+		flank_size: int = 24
 	) -> None:
 		self.max_length = max_length
+		self.flank_size = flank_size
 
 		super().__init__(
 			checkpoint=checkpoint,
@@ -43,22 +45,22 @@ class NuclDNABERT(BaseModel):
 		self,
 		checkpoint: str
 	) -> None:
-		self.model = BertForSequenceClassification.from_pretrained(
+		self.model = AutoModelForSequenceClassification.from_pretrained(
 			checkpoint,
 			num_labels=self.num_labels,
 			trust_remote_code=True
 		)
-		self.tokenizer = BertTokenizer.from_pretrained(checkpoint)
+		self.tokenizer = AutoTokenizer.from_pretrained(checkpoint)
 
 	def from_pretrained(
 		self,
 		checkpoint: str
 	) -> None:
-		self.model = BertForSequenceClassification.from_pretrained(
+		self.model = AutoModelForSequenceClassification.from_pretrained(
 			checkpoint,
 			num_labels=self.num_labels
 		)
-		self.tokenizer = BertTokenizer.from_pretrained(checkpoint)
+		self.tokenizer = AutoTokenizer.from_pretrained(checkpoint)
 	
 	def _process_sequence(
 		self,
@@ -109,32 +111,14 @@ class NuclDNABERT(BaseModel):
 		processed_sequence = (
 			f"{self._process_sequence(flank_before)}[SEP]"
 			f"{self._process_sequence(sequence)}[SEP]"
+			f"{self._process_sequence(flank_after)}"
 		)
-		processed_sequence += self._process_sequence(sequence)
-		processed_sequence += self._process_sequence(flank_after)
-
-		return {
-			"sequence": sequence,
-			"target": target
-		}
-	
-
-		output = f"<|SEQUENCE|>{self._process_sequence(sequence)}"
-		
-		output += f"<|FLANK_BEFORE|>{self._process_sequence(flank_before)}"
-		
-		output += f"<|FLANK_AFTER|>{self._process_sequence(flank_after)}"
-		
-		if organism:
-			output += f"<|ORGANISM|>{organism[:10].lower()}"
-		
-		output += "<|TARGET|>"
 
 		label = None
 		if target:
 			label = self._process_target(target)
-		
-		return output, label
+
+		return processed_sequence, label
 
 	def _tokenize(
 		self,
@@ -166,31 +150,27 @@ class NuclDNABERT(BaseModel):
 			raise MissingEssentialProp("Model or Tokenizer missing.")
 		
 		encoded_input = self.tokenizer(
-			sentence,
-			return_tensors="pt"
+			sentence
 		)
 
-		label = torch.tensor(target, dtype=torch.long)
+		input_ids = torch.tensor(encoded_input["input_ids"], dtype=torch.long)
+		attention_mask = torch.tensor(encoded_input["attention_mask"], dtype=torch.bool)
+		label = torch.tensor([target], dtype=torch.long)
 
-		return (
-			encoded_input["input_ids"].squeeze(0),
-			encoded_input["attention_mask"].squeeze(0),
-			label
-		)
+		return input_ids, attention_mask, label
 	
 	def _prepare_dataset(
 		self,
-		data: list[Input]
+		dataset: list[Input]
 	) -> Dataset:
-		dataset = []
-		for register in tqdm(data):
-			sequence = register["sequence"]
-			target = register["target"]
-			organism = register["organism"]
+		tokenized = []
 
-			if target == None:
+		for data in tqdm(dataset):
+			sequence = data["sequence"]
+			target = data.get("target")
+
+			if target is None:
 				raise MissingEssentialProp("Target missing")
-
 
 			indices = list(range(len(sequence)))
 			random.shuffle(indices)
@@ -208,8 +188,7 @@ class NuclDNABERT(BaseModel):
 					sequence=sequence[i],
 					flank_before=flank_before,
 					flank_after=flank_after,
-					target=cropped_target,
-					organism=organism
+					target=cropped_target
 				)
 
 				assert label_id is not None
@@ -225,9 +204,9 @@ class NuclDNABERT(BaseModel):
 					"labels": labels
 				}
 
-				dataset.append(sample)
+				tokenized.append(sample)
 
-		return Dataset.from_list(dataset)
+		return Dataset.from_list(tokenized)
 
 	def train(
 		self,
@@ -280,7 +259,6 @@ class NuclDNABERT(BaseModel):
 		self.model.eval()
 
 		sequence = data["sequence"]
-		organism = data["organism"]
 
 		predicted = ""
 		
@@ -295,8 +273,7 @@ class NuclDNABERT(BaseModel):
 				sentence, _ = self._build_input(
 					sequence=nucl,
 					flank_before=flank_before,
-					flank_after=flank_after,
-					organism=organism
+					flank_after=flank_after
 				)
 
 				tokenized_input = self._tokenize(sentence)
@@ -310,9 +287,4 @@ class NuclDNABERT(BaseModel):
 
 				predicted += self._unprocess_target(int(pred_id))
 
-			predicted = (
-				predicted.replace("[EXON]", "E")
-				.replace("[INTRON]", "I")
-				.replace("[DNA_UNKNOWN]", "U")
-			)
 			return predicted

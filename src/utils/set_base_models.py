@@ -14,6 +14,10 @@ download_info = [
   {
     "model_id": "zhihan1996/DNABERT-2-117M",
     "local_dir": folder + "dnabert2"
+  },
+  {
+    "model_id": "google-t5/t5-base",
+    "local_dir": folder + "t5"
   }
 ]
 

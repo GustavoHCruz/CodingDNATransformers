@@ -132,11 +132,11 @@ class NuclBERT(BaseModel):
 		target: int
 	) -> str:
 		if target == 0:
-			return "[EXON]"
+			return "E"
 		elif target == 1:
-			return "[INTRON]"
+			return "I"
 		else:
-			return "[DNA_UNKNOWN]"
+			return "U"
 
 	def build_input(
 		self,
@@ -227,7 +227,7 @@ class NuclBERT(BaseModel):
 			target = register["target"]
 			organism = register["organism"]
 
-			if target == None:
+			if target is None:
 				raise MissingEssentialProp("Target missing")
 
 
@@ -349,9 +349,4 @@ class NuclBERT(BaseModel):
 
 				predicted += self._unprocess_target(int(pred_id))
 
-			predicted = (
-				predicted.replace("[EXON]", "E")
-				.replace("[INTRON]", "I")
-				.replace("[DNA_UNKNOWN]", "U")
-			)
 			return predicted

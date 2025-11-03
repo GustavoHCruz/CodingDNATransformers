@@ -11,10 +11,10 @@ The contribution of this work is as fallows:
 
 ---
 
-## Approaches
+## Tasks
 
-This work is structured into three main approaches, each addressing the problem of DNA coding analysis from a different perspective.  
-Each section describes the models, expected input/output format, and examples.
+This work is structured into three main tasks, each addressing the problem of DNA coding analysis from a different perspective.  
+Each following section describes the models, expected input/output format, and examples.
 
 ---
 
@@ -23,23 +23,23 @@ Each section describes the models, expected input/output format, and examples.
 The model receives an entire DNA sequence and classifies it as **coding (exon)** or **non-coding (intron)**.  
 Additional metadata (organism, gene name, flanking regions) can be included probabilistically to enrich the context.
 
-- **Models used:** [GPT-2](https://huggingface.co/openai-community/gpt2), [BERT](https://huggingface.co/google-bert/bert-base-uncased), [DNABERT2](https://huggingface.co/zhihan1996/DNABERT-2-117M)
+- **Models used:** [GPT-2](https://huggingface.co/openai-community/gpt2), [BERT](https://huggingface.co/google-bert/bert-base-uncased), [DNABERT2](https://huggingface.co/zhihan1996/DNABERT-2-117M), [T5](https://huggingface.co/google-t5/t5-base)
 
 #### Input/Output Format (GPT and BERT)
 
 ```text
-<|SEQUENCE|>ACGAAGGGTAAGCC...
-<|FLANK_BEFORE|>ACGT...
-<|FLANK_AFTER|>ACGT...
+<|SEQUENCE|>[A][C][G][A][A][G][G][G][T][A][A][G][C][C]...
+<|FLANK_BEFORE|>[A][C][G][T]...
+<|FLANK_AFTER|>[A][C][G][T]...
 <|ORGANISM|>homo sapiens
 <|GENE|>...
 <|TARGET|>
 ```
 
-- `<|SEQUENCE|>`: the full DNA sequence.
+- `<|SEQUENCE|>`: token for the full DNA sequence.
 - `<|FLANK_BEFORE|>` and `<|FLANK_AFTER|>`: optional context regions.
-- `<|ORGANISM|>`: optional organism name (truncated).
-- `<|GENE|>`: optional gene name (truncated).
+- `<|ORGANISM|>`: optional organism name (truncate to a maximum of 10 characters).
+- `<|GENE|>`: optional gene name (truncate to a maximum of 10 characters).
 - `<|TARGET|>`: separation token where the model predicts the label.
 
 ### 2. Sliding Window Nucleotide Classification (I/E/U)
@@ -52,14 +52,14 @@ This enables fine-grained annotation across long DNA sequences.
 #### Input/Output Format
 
 ```text
-<|SEQUENCE|>A
-<|FLANK_BEFORE|>CGAA...
-<|FLANK_AFTER|>GGTA...
+<|SEQUENCE|>[A]
+<|FLANK_BEFORE|>[C][G][A][A]...
+<|FLANK_AFTER|>[G][G][T][A]...
 <|ORGANISM|>homo sapiens
 <|TARGET|>
 ```
 
-- `<|SEQUENCE|>`: the current nucleotide.
+- `<|SEQUENCE|>`: token for the current nucleotide.
 - `<|FLANK_BEFORE|>` and `<|FLANK_AFTER|>`: local nucleotide context.
 - `<|ORGANISM|>`: optional organism name.
 - `<|TARGET|>`: separation token where the label is predicted.
@@ -70,19 +70,19 @@ The model translates DNA sequences directly into their corresponding protein seq
 
 Organism metadata can optionally be provided.
 
-- Models used: [GPT-2](https://huggingface.co/openai-community/gpt2)
+- Models used: [T5](https://huggingface.co/google-t5/t5-base)
 
 #### Input/Output Format
 
 ```text
-<|DNA|>ATGAAATTT...
+<|DNA|>[DNA_A][DNA_T][DNA_G][DNA_A][DNA_A][DNA_A][DNA_T][DNA_T][DNA_T]...
 <|ORGANISM|>homo sapiens
-<|PROTEIN|>
+<|PROTEIN|>[PROT_C][PROT_A][PROT_G]...
 ```
 
-- `<|DNA|>`: the input DNA sequence.
+- `<|DNA|>`: start of the input of the DNA.
 - `<|ORGANISM|>`: optional organism name.
-- `<|PROTEIN|>`: token where the amino acid sequence is generated.
+- `<|PROTEIN|>`: start of the amino acid sequence output.
 
 ## Configuration and Execution
 
@@ -90,7 +90,7 @@ Each approach has its own main notebook file:
 
 - Full Sequence Classification: main-exin.ipynb
 - Sliding Window I/E/U: main-nucl.ipynb
-- DNA to Protein Translation: main-dna.ipynb
+- DNA to Protein Translation: main-trad.ipynb
 
 The code can be executed on both CPU and GPU, with CUDA strongly recommended for optimal performance.
 
@@ -137,13 +137,14 @@ The derivations from it, used to train the models, was also provided in the foll
 Each one of the trained models will be published on Hugging Face:
 
 - **Full DNA Sequence Classification:**
-  - [GPT-2](link_here)
-  - [BERT](link_here)
-  - [DNABERT2](link_here)
+  - [GPT-2](gu-dudi/ExInGPT)
+  - [BERT](gu-dudi/ExInBERT)
+  - [DNABERT2](gu-dudi/ExInDNABERT2)
 - **Sliding Window Nucleotide CLassification:**
   - [BERT](link_here)
+  - [DNABERT](link_here)
 - **Direct DNA-to-Protein Translation Dataset:**
-  - [GPT-2](link_here)
+  - [T5](link_here)
 
 ## Optional Dependency: BLASTp
 
