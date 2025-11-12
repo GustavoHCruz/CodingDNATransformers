@@ -13,3 +13,4 @@ __pycache__
 .venv
 .pdm-python
 trainer_output
+*.jsonl

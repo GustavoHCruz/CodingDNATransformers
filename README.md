@@ -6,8 +6,12 @@ The project is entirely developed in Python and leverages state-of-the-art **tra
 
 The contribution of this work is as fallows:
 
-- Achieved **2nd place** at a national event in Fortaleza, Ceará, Brazil - [Symposium on Knowledge Discovery, Mining and Learning (KDMiLe) - SBC](https://doi.org/10.5753/kdmile.2025.247575).
-- Later accepted for publication in Athens, Greece, on [International Conference on BioInformatics and BioEngineering (BIBE) - IEEE]().
+- **Full Paper – 2nd Place (National)**  
+  Achieved **2nd place** at the _Symposium on Knowledge Discovery, Mining and Learning (KDMiLe 2025)_, organized by the Brazilian Computer Society (SBC), held in Fortaleza, Ceará, Brazil.  
+  [https://doi.org/10.5753/kdmile.2025.247575](https://doi.org/10.5753/kdmile.2025.247575)
+- **Short Paper (International)**  
+  Presented at the _IEEE International Conference on Bioinformatics and BioEngineering (BIBE 2025)_, held in Athens, Greece.  
+  [https://doi.org/10.1109/BIBE66822.2025.00113](https://doi.org/10.1109/BIBE66822.2025.00113)
 
 ---
 
@@ -124,25 +128,19 @@ The notebooks are offered as optional pipelines for training, inference, and eva
 
 [GenBank](https://www.ncbi.nlm.nih.gov/genbank/) dataset was used on this work.
 
-The processed version used in this work is available on the [here](link_here).
-
-The derivations from it, used to train the models, was also provided in the following links:
-
-- [Full DNA Sequence Classification Train Dataset](link_here)
-- [Sliding Window Nucleotide CLassification Dataset](link_here)
-- [Direct DNA-to-Protein Translation Dataset](link_here)
+The processed version used in this work is available on [DNA Coding Regions Dataset](https://huggingface.co/datasets/GustavoHCruz/DNA_coding_regions).
 
 ## Models
 
 Each one of the trained models will be published on Hugging Face:
 
 - **Full DNA Sequence Classification:**
-  - [GPT-2](gu-dudi/ExInGPT)
-  - [BERT](gu-dudi/ExInBERT)
-  - [DNABERT2](gu-dudi/ExInDNABERT2)
+  - [GPT-2](https://huggingface.co/GustavoHCruz/ExInGPT)
+  - [BERT](https://huggingface.co/GustavoHCruz/ExInBERT)
+  - [DNABERT2](https://huggingface.co/GustavoHCruz/ExInDNABERT2)
 - **Sliding Window Nucleotide CLassification:**
-  - [BERT](link_here)
-  - [DNABERT](link_here)
+  - [BERT](https://huggingface.co/GustavoHCruz/NuclBERT)
+  - [DNABERT](https://huggingface.co/GustavoHCruz/NuclDNABERT2)
 - **Direct DNA-to-Protein Translation Dataset:**
   - [T5](link_here)
 
