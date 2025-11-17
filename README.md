@@ -138,9 +138,9 @@ Each one of the trained models will be published on Hugging Face:
   - [GPT-2](https://huggingface.co/GustavoHCruz/ExInGPT)
   - [BERT](https://huggingface.co/GustavoHCruz/ExInBERT)
   - [DNABERT2](https://huggingface.co/GustavoHCruz/ExInDNABERT2)
-- **Sliding Window Nucleotide CLassification:**
+- **Sliding Window Nucleotide Classification:**
   - [BERT](https://huggingface.co/GustavoHCruz/NuclBERT)
-  - [DNABERT](https://huggingface.co/GustavoHCruz/NuclDNABERT2)
+  - [DNABERT2](https://huggingface.co/GustavoHCruz/NuclDNABERT2)
 - **Direct DNA-to-Protein Translation Dataset:**
   - [T5](link_here)
 
