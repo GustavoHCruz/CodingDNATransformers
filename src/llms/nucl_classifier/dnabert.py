@@ -4,8 +4,8 @@ from typing import TypedDict, cast
 import torch
 from datasets import Dataset
 from tqdm import tqdm
-from transformers import (AutoModelForSequenceClassification, AutoTokenizer,
-                          DataCollatorWithPadding, Trainer, TrainingArguments)
+from transformers import (AutoModel, AutoTokenizer, DataCollatorWithPadding,
+                          Trainer, TrainingArguments)
 
 from llms.base import BaseModel
 from schemas.train_params import TrainParams
@@ -45,7 +45,7 @@ class NuclDNABERT(BaseModel):
 		self,
 		checkpoint: str
 	) -> None:
-		self.model = AutoModelForSequenceClassification.from_pretrained(
+		self.model = AutoModel.from_pretrained(
 			checkpoint,
 			num_labels=self.num_labels,
 			trust_remote_code=True
@@ -56,7 +56,7 @@ class NuclDNABERT(BaseModel):
 		self,
 		checkpoint: str
 	) -> None:
-		self.model = AutoModelForSequenceClassification.from_pretrained(
+		self.model = AutoModel.from_pretrained(
 			checkpoint,
 			num_labels=self.num_labels
 		)

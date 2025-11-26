@@ -3,8 +3,7 @@ from typing import Literal, TypedDict
 import torch
 from datasets import Dataset
 from tqdm import tqdm
-from transformers import (AutoModelForSequenceClassification, AutoTokenizer,
-                          DataCollatorWithPadding)
+from transformers import AutoModel, AutoTokenizer, DataCollatorWithPadding
 from transformers.trainer import Trainer
 from transformers.training_args import TrainingArguments
 
@@ -29,7 +28,7 @@ class ExInClassifierDNABERT(BaseModel):
 		self,
 		checkpoint: str
 	) -> None:
-		self.model = AutoModelForSequenceClassification.from_pretrained(
+		self.model = AutoModel.from_pretrained(
 			checkpoint,
 			num_labels=2,
 			trust_remote_code=True
@@ -40,7 +39,7 @@ class ExInClassifierDNABERT(BaseModel):
 		self,
 		checkpoint: str
 	) -> None:
-		self.model = AutoModelForSequenceClassification.from_pretrained(checkpoint, num_labels=2)
+		self.model = AutoModel.from_pretrained(checkpoint, num_labels=2)
 		self.tokenizer = AutoTokenizer.from_pretrained(checkpoint)
 		
 	def _process_sequence(
