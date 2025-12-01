@@ -2,7 +2,6 @@ from typing import TypedDict
 
 import torch
 from datasets import Dataset
-from torch import Tensor
 from tqdm import tqdm
 from transformers import (BatchEncoding, DataCollatorForSeq2Seq,
                           Seq2SeqTrainer, Seq2SeqTrainingArguments,
