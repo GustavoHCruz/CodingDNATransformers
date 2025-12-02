@@ -3,13 +3,12 @@ from typing import TypedDict
 
 import torch
 from datasets import Dataset
+from llms.base import BaseModel
+from schemas.train_params import TrainParams
 from tqdm import tqdm
 from transformers import (BatchEncoding, DataCollatorForSeq2Seq,
                           Seq2SeqTrainer, Seq2SeqTrainingArguments,
                           T5ForConditionalGeneration, T5Tokenizer)
-
-from llms.base import BaseModel
-from schemas.train_params import TrainParams
 from utils.exceptions import MissingEssentialProp
 
 
@@ -46,7 +45,6 @@ class DNATranslatorT5(BaseModel):
 			"additional_special_tokens": ["<|DNA|>", "<|ORGANISM|>", "<|PROTEIN|>"]
 		})
 
-		tokenizer.pad_token = tokenizer.eos_token
 		model.resize_token_embeddings(len(tokenizer), mean_resizing=False)
 
 		if model is None or tokenizer is None:
@@ -95,7 +93,7 @@ class DNATranslatorT5(BaseModel):
 
 		organism = data.get("organism")
 		if organism:
-			input_sequence += f"<|ORGANISM|>{organism[:10].lower()}"
+			input_sequence += f"<|ORGANISM|>{organism[:10].lower().strip()}"
 
 		output_sequence = None
 		

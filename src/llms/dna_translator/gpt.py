@@ -3,14 +3,13 @@ from typing import TypedDict, cast
 
 import torch
 from datasets import Dataset
+from llms.base import BaseModel
+from schemas.train_params import TrainParams
 from torch import Tensor
 from tqdm import tqdm
 from transformers.models.gpt2 import GPT2LMHeadModel, GPT2Tokenizer
 from transformers.trainer import Trainer
 from transformers.training_args import TrainingArguments
-
-from llms.base import BaseModel
-from schemas.train_params import TrainParams
 from utils.data_collators import DataCollatorForFT
 from utils.exceptions import MissingEssentialProp
 
@@ -97,7 +96,7 @@ class DNATranslatorGPT(BaseModel):
 
 		organism = data.get("organism")
 		if organism:
-			input_sequence += f"<|ORGANISM|>{organism[:10].lower()}"
+			input_sequence += f"<|ORGANISM|>{organism[:10].lower().strip()}"
 
 		output_sequence = None
 
@@ -136,23 +135,19 @@ class DNATranslatorGPT(BaseModel):
 		if self.model is None or self.tokenizer is None:
 			raise MissingEssentialProp("Model or Tokenizer missing.")
 		
-		encoded_input = self.tokenizer(
-			input_text
-		)
-		encoded_expected = self.tokenizer(
-			expected_text
-		)
+		encoded_input = self.tokenizer(input_text)
+		only_inputs = encoded_input["input_ids"]
+		assert isinstance(only_inputs, list)
 
-		input_ids = torch.tensor(encoded_expected["input_ids"], dtype=torch.long)
-		attention_mask = torch.tensor(encoded_expected["attention_mask"], dtype=torch.bool)
+		encoded = self.tokenizer(input_text + expected_text)
 
-		labels = torch.full_like(input_ids, -100)
+		input_ids = torch.tensor(encoded["input_ids"])
+		attention_mask = torch.tensor(encoded["attention_mask"])
 
-		start = len(cast(list, encoded_input["input_ids"]))
+		labels = input_ids.clone()
 
-		for i in range(start, len(input_ids)):
-			if input_ids[i] != self.tokenizer.pad_token_id:
-				labels[i] = input_ids[i]
+
+		labels[:len(only_inputs)] = -100
 		
 		return input_ids, attention_mask, labels
 
@@ -236,15 +231,17 @@ class DNATranslatorGPT(BaseModel):
 			raise MissingEssentialProp("Model or Tokenizer missing.")
 		
 		input_sequence, _ = self._build_input(input)
-
+		
 		input_ids, attention_mask = self._tokenize_for_inference(input_sequence)
+		
+		max_new_tokens = self.max_length - len(input_ids[0])
 
 		self.model.eval()
 		with torch.no_grad():
 			generated = self.model.generate(
 				input_ids=input_ids,
 				attention_mask=attention_mask,
-				max_new_tokens=128,
+				max_new_tokens=max_new_tokens,
 				pad_token_id=self.tokenizer.pad_token_id,
 				do_sample=True,
 				temperature=0.8,
@@ -256,6 +253,6 @@ class DNATranslatorGPT(BaseModel):
 		generated_texts = self.tokenizer.decode(generated[0], skip_special_tokens=False)
 
 		start = generated_texts.find("<|PROTEIN|>")
-		protein_tokenized = generated_texts[start + len("<|PROTEINS|>"):].strip()
+		protein_tokenized = generated_texts[start + len("<|PROTEIN|>"):].strip()
 		
 		return self._unprocess_target(protein_tokenized)
