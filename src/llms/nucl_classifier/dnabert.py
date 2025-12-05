@@ -3,12 +3,11 @@ from typing import TypedDict, cast
 
 import torch
 from datasets import Dataset
-from tqdm import tqdm
-from transformers import (AutoModel, AutoTokenizer, DataCollatorWithPadding,
-                          Trainer, TrainingArguments)
-
 from llms.base import BaseModel
 from schemas.train_params import TrainParams
+from tqdm import tqdm
+from transformers import (AutoModelForSequenceClassification, AutoTokenizer,
+                          DataCollatorWithPadding, Trainer, TrainingArguments)
 from utils.exceptions import MissingEssentialProp
 
 
@@ -45,7 +44,7 @@ class NuclDNABERT(BaseModel):
 		self,
 		checkpoint: str
 	) -> None:
-		self.model = AutoModel.from_pretrained(
+		self.model = AutoModelForSequenceClassification.from_pretrained(
 			checkpoint,
 			num_labels=self.num_labels,
 			trust_remote_code=True
@@ -56,9 +55,10 @@ class NuclDNABERT(BaseModel):
 		self,
 		checkpoint: str
 	) -> None:
-		self.model = AutoModel.from_pretrained(
+		self.model = AutoModelForSequenceClassification.from_pretrained(
 			checkpoint,
-			num_labels=self.num_labels
+			num_labels=self.num_labels,
+			trust_remote_code=True
 		)
 		self.tokenizer = AutoTokenizer.from_pretrained(checkpoint)
 	
