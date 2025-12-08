@@ -74,7 +74,7 @@ The model translates DNA sequences directly into their corresponding protein seq
 
 Organism metadata can optionally be provided.
 
-- Models used: [T5](https://huggingface.co/google-t5/t5-base)
+- Models used: [GPT-2](https://huggingface.co/openai-community/gpt2), [T5](https://huggingface.co/google-t5/t5-base)
 
 #### Input/Output Format
 
@@ -132,7 +132,7 @@ The processed version used in this work is available on [DNA Coding Regions Data
 
 ## Models
 
-Each one of the trained models will be published on Hugging Face:
+Some of the trained models are published on Hugging Face:
 
 - **Full DNA Sequence Classification:**
   - [GPT-2](https://huggingface.co/GustavoHCruz/ExInGPT)
@@ -141,8 +141,6 @@ Each one of the trained models will be published on Hugging Face:
 - **Sliding Window Nucleotide Classification:**
   - [BERT](https://huggingface.co/GustavoHCruz/NuclBERT)
   - [DNABERT2](https://huggingface.co/GustavoHCruz/NuclDNABERT2)
-- **Direct DNA-to-Protein Translation Dataset:**
-  - [T5](link_here)
 
 ## Optional Dependency: BLASTp
 
