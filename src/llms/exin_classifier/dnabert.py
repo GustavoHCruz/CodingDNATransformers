@@ -2,14 +2,13 @@ from typing import Literal, TypedDict
 
 import torch
 from datasets import Dataset
+from llms.base import BaseModel
+from schemas.train_params import TrainParams
 from tqdm import tqdm
 from transformers import (AutoModelForSequenceClassification, AutoTokenizer,
                           DataCollatorWithPadding)
 from transformers.trainer import Trainer
 from transformers.training_args import TrainingArguments
-
-from llms.base import BaseModel
-from schemas.train_params import TrainParams
 from utils.exceptions import MissingEssentialProp
 
 
@@ -40,7 +39,11 @@ class ExInClassifierDNABERT(BaseModel):
 		self,
 		checkpoint: str
 	) -> None:
-		self.model = AutoModelForSequenceClassification.from_pretrained(checkpoint, num_labels=2)
+		self.model = AutoModelForSequenceClassification.from_pretrained(
+			checkpoint,
+			num_labels=2,
+			trust_remote_code=True
+		)
 		self.tokenizer = AutoTokenizer.from_pretrained(checkpoint)
 		
 	def _process_sequence(

@@ -1,14 +1,16 @@
 import re
-from typing import TypedDict
+from typing import TypedDict, cast
 
 import torch
 from datasets import Dataset
 from llms.base import BaseModel
 from schemas.train_params import TrainParams
+from torch import Tensor
 from tqdm import tqdm
-from transformers import (BatchEncoding, DataCollatorForSeq2Seq,
-                          Seq2SeqTrainer, Seq2SeqTrainingArguments,
-                          T5ForConditionalGeneration, T5Tokenizer)
+from transformers.models.gpt2 import GPT2LMHeadModel, GPT2Tokenizer
+from transformers.trainer import Trainer
+from transformers.training_args import TrainingArguments
+from utils.data_collators import DataCollatorForFT
 from utils.exceptions import MissingEssentialProp
 
 
@@ -17,17 +19,17 @@ class Input(TypedDict):
 	protein_sequence: str | None
 	organism: str | None
 
-class DNATranslatorT5(BaseModel):
-	model: T5ForConditionalGeneration | None = None
-	tokenizer: T5Tokenizer | None = None
-	max_length = 512
+class DNATranslatorGPT(BaseModel):
+	model: GPT2LMHeadModel | None = None
+	tokenizer: GPT2Tokenizer | None = None
+	max_length = 1024
 
 	def load_checkpoint(
 		self,
 		checkpoint: str
 	) -> None:
-		model = T5ForConditionalGeneration.from_pretrained(checkpoint)
-		tokenizer = T5Tokenizer.from_pretrained(checkpoint)
+		model = GPT2LMHeadModel.from_pretrained(checkpoint)
+		tokenizer = GPT2Tokenizer.from_pretrained(checkpoint)
 
 		special_tokens = [
 			"[DNA_A]", "[DNA_C]", "[DNA_G]", "[DNA_T]", "[DNA_R]",
@@ -38,13 +40,14 @@ class DNATranslatorT5(BaseModel):
 			"[PROT_K]", "[PROT_L]", "[PROT_M]", "[PROT_N]",
 			"[PROT_P]", "[PROT_Q]", "[PROT_R]", "[PROT_S]",
 			"[PROT_T]", "[PROT_V]", "[PROT_W]", "[PROT_Y]",
-			"[PROT_X]"
+			"[PROT_*]", "[PROT_X]"
 		]
 		tokenizer.add_tokens(special_tokens)
 		tokenizer.add_special_tokens({
 			"additional_special_tokens": ["<|DNA|>", "<|ORGANISM|>", "<|PROTEIN|>"]
 		})
 
+		tokenizer.pad_token = tokenizer.eos_token
 		model.resize_token_embeddings(len(tokenizer), mean_resizing=False)
 
 		if model is None or tokenizer is None:
@@ -53,25 +56,25 @@ class DNATranslatorT5(BaseModel):
 		
 		self.model = model
 		self.tokenizer = tokenizer
-	
+		
 	def from_pretrained(
 		self,
 		checkpoint: str
 	) -> None:
-		self.model = T5ForConditionalGeneration.from_pretrained(checkpoint)
-		self.tokenizer = T5Tokenizer.from_pretrained(checkpoint)
+		self.model = GPT2LMHeadModel.from_pretrained(checkpoint)
+		self.tokenizer = GPT2Tokenizer.from_pretrained(checkpoint)
 
 	def _preprare_dna_sequence(
 		self,
 		sequence: str
 	) -> str:
-		return f"".join(f"[DNA_{nucl.upper()}]" for nucl in sequence)
-	
+		return "".join(f"[DNA_{nucl.upper()}]" for nucl in sequence)
+
 	def _prepare_protein_sequence(
 		self,
 		sequence: str
 	) -> str:
-		return f"".join(f"[PROT_{amino_acid}]" for amino_acid in sequence)
+		return "".join(f"[PROT_{amino_acid.upper()}]" for amino_acid in sequence)
 	
 	def build_input(
 		self,
@@ -96,51 +99,63 @@ class DNATranslatorT5(BaseModel):
 			input_sequence += f"<|ORGANISM|>{organism[:10].lower().strip()}"
 
 		output_sequence = None
-		
+
 		protein = data.get("protein_sequence")
 		if protein:
 			output_sequence = f"<|PROTEIN|>{self._prepare_protein_sequence(protein)}"
-
+		
 		return input_sequence, output_sequence
-	
+
 	def _tokenize_for_inference(
 		self,
-		dna_sequence: str
-	) -> BatchEncoding:
-		if self.tokenizer is None or self.model is None:
+		input_sequence: str
+	) -> tuple[Tensor, Tensor]:
+		if self.model is None or self.tokenizer is None:
 			raise MissingEssentialProp("Model or Tokenizer missing.")
 
-		tokenized_input = self.tokenizer(
-			dna_sequence,
+		tokenized = self.tokenizer(
+			input_sequence,
 			truncation=True,
 			max_length=self.max_length,
 			return_tensors="pt"
 		).to(self.model.device)
 
-		return tokenized_input
+		input_ids = tokenized["input_ids"]
+		assert isinstance(input_ids, Tensor)
+		attention_mask = tokenized["attention_mask"]
+		assert isinstance(attention_mask, Tensor)
 
+		return (input_ids, attention_mask)
+	
 	def _tokenize_for_training(
 		self,
-		input_sequence: str,
-		output_sequence: str
-	) -> BatchEncoding:
-		if self.tokenizer is None:
-			raise MissingEssentialProp("Tokenizer missing.")
+		input_text: str,
+		expected_text: str
+	) -> tuple[Tensor, Tensor, Tensor]:
+		if self.model is None or self.tokenizer is None:
+			raise MissingEssentialProp("Model or Tokenizer missing.")
 		
-		tokenized_input = self.tokenizer(
-			input_sequence,
-			text_target=output_sequence,
-			truncation=True,
-			max_length=self.max_length
-		)
+		encoded_input = self.tokenizer(input_text)
+		only_inputs = encoded_input["input_ids"]
+		assert isinstance(only_inputs, list)
 
-		return tokenized_input
+		encoded = self.tokenizer(input_text + expected_text)
+
+		input_ids = torch.tensor(encoded["input_ids"])
+		attention_mask = torch.tensor(encoded["attention_mask"])
+
+		labels = input_ids.clone()
+
+
+		labels[:len(only_inputs)] = -100
 		
+		return input_ids, attention_mask, labels
+
 	def _prepare_dataset(
 		self,
 		dataset: list[Input]
 	) -> Dataset:
-		tokenized_dataset = []
+		tokenized = []
 
 		for data in tqdm(dataset):
 			input_sequence, output_sequence = self._build_input(data)
@@ -149,13 +164,18 @@ class DNATranslatorT5(BaseModel):
 				raise ValueError("Target is missing.")
 
 			tokenized_input = self._tokenize_for_training(
-				input_sequence=input_sequence,
-				output_sequence=output_sequence
+				input_text=input_sequence,
+				expected_text=output_sequence
 			)
 
-			tokenized_dataset.append(tokenized_input)
+			input_ids, attention_mask, labels = tokenized_input
+			tokenized.append({
+				"input_ids": input_ids,
+				"attention_mask": attention_mask,
+				"labels": labels
+			})
 
-		return Dataset.from_list(tokenized_dataset)
+		return Dataset.from_list(tokenized)
 
 	def train(
 		self,
@@ -169,7 +189,7 @@ class DNATranslatorT5(BaseModel):
 		data = self._prepare_dataset(dataset)
 		self._log("Dataset prepared!")
 
-		args = Seq2SeqTrainingArguments(
+		args = TrainingArguments(
 			num_train_epochs=params.epochs,
 			optim=params.optim,
 			learning_rate=params.lr,
@@ -178,19 +198,16 @@ class DNATranslatorT5(BaseModel):
 			lr_scheduler_type="cosine",
 			save_strategy="no",
 			logging_steps=params.logging_steps,
-			predict_with_generate=True
 		)
 
 		if self.seed:
 			args.seed = self.seed
-		
-		collator = DataCollatorForSeq2Seq(self.tokenizer, model=self.model)
 
-		trainer = Seq2SeqTrainer(
+		trainer = Trainer(
 			model=self.model,
 			train_dataset=data,
 			args=args,
-			data_collator=collator
+			data_collator=DataCollatorForFT(self.tokenizer),
 		)
 
 		self._log("Starting training...")
@@ -208,21 +225,34 @@ class DNATranslatorT5(BaseModel):
 
 	def generate(
 		self,
-		data: Input
+		input: Input
 	) -> str:
 		if self.model is None or self.tokenizer is None:
 			raise MissingEssentialProp("Model or Tokenizer missing.")
 		
-		sentence, _ = self._build_input(data)
-
-		tokenized = self._tokenize_for_inference(sentence)
+		input_sequence, _ = self._build_input(input)
+		
+		input_ids, attention_mask = self._tokenize_for_inference(input_sequence)
+		
+		max_new_tokens = self.max_length - len(input_ids[0])
 
 		self.model.eval()
 		with torch.no_grad():
-			outputs = self.model.generate(
-				input_ids=tokenized["input_ids"],
-				num_beams=3,
-				early_stopping=True
+			generated = self.model.generate(
+				input_ids=input_ids,
+				attention_mask=attention_mask,
+				max_new_tokens=max_new_tokens,
+				pad_token_id=self.tokenizer.pad_token_id,
+				do_sample=True,
+				temperature=0.8,
+				top_p=0.95,
+				typical_p=0.98,
+				num_beams=1
 			)
 		
-		return self._unprocess_target(self.tokenizer.decode(outputs[0], skip_special_tokens=True))
+		generated_texts = self.tokenizer.decode(generated[0], skip_special_tokens=False)
+
+		start = generated_texts.find("<|PROTEIN|>")
+		protein_tokenized = generated_texts[start + len("<|PROTEIN|>"):].strip()
+		
+		return self._unprocess_target(protein_tokenized)
