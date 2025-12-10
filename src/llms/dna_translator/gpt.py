@@ -28,7 +28,10 @@ class DNATranslatorGPT(BaseModel):
 		self,
 		checkpoint: str
 	) -> None:
-		model = GPT2LMHeadModel.from_pretrained(checkpoint)
+		model = GPT2LMHeadModel.from_pretrained(
+			checkpoint,
+			device_map="auto"
+		)
 		tokenizer = GPT2Tokenizer.from_pretrained(checkpoint)
 
 		special_tokens = [
@@ -44,7 +47,7 @@ class DNATranslatorGPT(BaseModel):
 		]
 		tokenizer.add_tokens(special_tokens)
 		tokenizer.add_special_tokens({
-			"additional_special_tokens": ["<|DNA|>", "<|ORGANISM|>", "<|PROTEIN|>"]
+			"additional_special_tokens": ["<|DNA|>", "<|ORGANISM|>", "<|PROTEIN|>", "<|END|>"]
 		})
 
 		tokenizer.pad_token = tokenizer.eos_token
@@ -61,7 +64,10 @@ class DNATranslatorGPT(BaseModel):
 		self,
 		checkpoint: str
 	) -> None:
-		self.model = GPT2LMHeadModel.from_pretrained(checkpoint)
+		self.model = GPT2LMHeadModel.from_pretrained(
+			checkpoint,
+			device_map="auto"
+		)
 		self.tokenizer = GPT2Tokenizer.from_pretrained(checkpoint)
 
 	def _preprare_dna_sequence(
@@ -102,7 +108,7 @@ class DNATranslatorGPT(BaseModel):
 
 		protein = data.get("protein_sequence")
 		if protein:
-			output_sequence = f"<|PROTEIN|>{self._prepare_protein_sequence(protein)}"
+			output_sequence = f"<|PROTEIN|>{self._prepare_protein_sequence(protein)}<|END|>"
 		
 		return input_sequence, output_sequence
 
@@ -145,7 +151,6 @@ class DNATranslatorGPT(BaseModel):
 		attention_mask = torch.tensor(encoded["attention_mask"])
 
 		labels = input_ids.clone()
-
 
 		labels[:len(only_inputs)] = -100
 		
@@ -243,16 +248,19 @@ class DNATranslatorGPT(BaseModel):
 				attention_mask=attention_mask,
 				max_new_tokens=max_new_tokens,
 				pad_token_id=self.tokenizer.pad_token_id,
+				eos_token_id=self.tokenizer.convert_tokens_to_ids("<|END|>"),
 				do_sample=True,
 				temperature=0.8,
 				top_p=0.95,
 				typical_p=0.98,
-				num_beams=1
+				num_beams=1,
+				repetition_penalty=1.1
 			)
 		
 		generated_texts = self.tokenizer.decode(generated[0], skip_special_tokens=False)
 
-		start = generated_texts.find("<|PROTEIN|>")
-		protein_tokenized = generated_texts[start + len("<|PROTEIN|>"):].strip()
-		
+		start = generated_texts.find("<|PROTEIN|>") + len("<|PROTEIN|>")
+		end = generated_texts.find("<|END|>", start)
+		protein_tokenized = generated_texts[start:end].strip()
+
 		return self._unprocess_target(protein_tokenized)
