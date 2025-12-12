@@ -10,7 +10,6 @@ def blast_analysis(
 	makeblast_path: str = "makeblastdb"
 ) -> dict:
 	blast_identity = ""
-	blast_score = ""
 	cov_target = ""
 	cov_pred = ""
 	alignment = ""
@@ -49,21 +48,20 @@ def blast_analysis(
 				first_line = out.splitlines()[0]
 				cols = first_line.split("\t")
 
-				blast_identity = cols[2]
+				blast_identity = round(float(cols[2]) / 100.0, 4)
 				aligned_len = int(cols[3])
-				blast_score = cols[4]
 				qlen = int(cols[5])
 				slen = int(cols[6])
 
-				cov_target = round(100.0 * aligned_len / slen, 2) if slen else 0.0
-				cov_pred = round(100.0 * aligned_len / qlen, 2) if qlen else 0.0
+				cov_target = aligned_len / slen if slen else 0.0
+				cov_pred   = aligned_len / qlen if qlen else 0.0
+
 				alignment = f"{cols[0]} vs {cols[1]} len={aligned_len}"
 			else:
 				alignment = "No hit"
 
 	return {
 		"blast_identity": blast_identity,
-		"blast_score": blast_score,
 		"cov_target": cov_target,
 		"cov_pred": cov_pred,
 		"alignment": alignment
