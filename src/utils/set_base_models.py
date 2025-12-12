@@ -8,10 +8,6 @@ download_info = [
     "local_dir": folder + "gpt2"
   },
   {
-    "model_id": "gpt2-xl",
-    "local_dir": folder + "gpt2-xl"
-  },
-  {
     "model_id": "bert-base-uncased",
     "local_dir": folder + "bert"
   },
