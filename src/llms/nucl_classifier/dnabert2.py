@@ -1,4 +1,5 @@
-from typing import Literal, TypedDict
+import random
+from typing import TypedDict, cast
 
 import torch
 from datasets import Dataset
@@ -6,9 +7,7 @@ from llms.base import BaseModel
 from schemas.train_params import TrainParams
 from tqdm import tqdm
 from transformers import (AutoModelForSequenceClassification, AutoTokenizer,
-                          DataCollatorWithPadding)
-from transformers.trainer import Trainer
-from transformers.training_args import TrainingArguments
+                          DataCollatorWithPadding, Trainer, TrainingArguments)
 from utils.exceptions import MissingEssentialProp
 
 
@@ -17,20 +16,39 @@ class Input(TypedDict):
 	target: str | None
 
 class GenerateInput(TypedDict):
-	sequence: str
+	sequence: str 
 
-class ExInClassifierDNABERT(BaseModel):
+class NuclDNABERT2(BaseModel):
 	model = None
 	tokenizer = None
-	max_length = 512
+	num_labels = 3
 
+	def __init__(
+		self,
+		checkpoint: str | None = None,
+		log_level="INFO",
+		seed: int | None = None,
+		max_length: int = 512,
+		flank_size: int = 24,
+		from_pretrained: bool = False
+	) -> None:
+		self.max_length = max_length
+		self.flank_size = flank_size
+
+		super().__init__(
+			checkpoint=checkpoint,
+			log_level=log_level,
+			seed=seed,
+			from_pretrained=from_pretrained
+		)	
+	
 	def load_checkpoint(
 		self,
 		checkpoint: str
 	) -> None:
 		self.model = AutoModelForSequenceClassification.from_pretrained(
 			checkpoint,
-			num_labels=2,
+			num_labels=self.num_labels,
 			trust_remote_code=True
 		)
 		self.tokenizer = AutoTokenizer.from_pretrained(checkpoint)
@@ -41,11 +59,11 @@ class ExInClassifierDNABERT(BaseModel):
 	) -> None:
 		self.model = AutoModelForSequenceClassification.from_pretrained(
 			checkpoint,
-			num_labels=2,
+			num_labels=self.num_labels,
 			trust_remote_code=True
 		)
 		self.tokenizer = AutoTokenizer.from_pretrained(checkpoint)
-		
+	
 	def _process_sequence(
 		self,
 		sequence: str
@@ -54,46 +72,63 @@ class ExInClassifierDNABERT(BaseModel):
 	
 	def _process_target(
 		self,
-		label: str
-	) -> Literal[0, 1]:
-		return 0 if label == "INTRON" else 1
+		target: str
+	) -> int:
+		if target == "E":
+			return 0
+		if target == "I":
+			return 1
+		if target == "U":
+			return 2
+		raise ValueError("Could not find a valid label.")
 	
 	def _unprocess_target(
 		self,
 		target: int
 	) -> str:
 		if target == 0:
-			return "INTRON"
-		return "EXON"
+			return "E"
+		elif target == 1:
+			return "I"
+		else:
+			return "U"
 
 	def build_input(
 		self,
 		sequence: str,
-		target: str | None
+		target: str | None = None
 	) -> Input:
 		return {
 			"sequence": sequence,
 			"target": target
 		}
-	
+
 	def _build_input(
 		self,
 		sequence: str,
+		flank_before: str,
+		flank_after: str,
 		target: str | None = None
 	) -> tuple[str, int | None]:
+		processed_sequence = (
+			f"{self._process_sequence(flank_before)}[SEP]"
+			f"{self._process_sequence(sequence)}[SEP]"
+			f"{self._process_sequence(flank_after)}"
+		)
+
 		label = None
 		if target:
 			label = self._process_target(target)
-		
-		return sequence, label
-	
+
+		return processed_sequence, label
+
 	def _tokenize(
 		self,
 		input_text: str
 	) -> tuple[torch.Tensor, torch.Tensor]:
 		if self.model is None or self.tokenizer is None:
 			raise MissingEssentialProp("Model or Tokenizer missing.")
-		
+
 		tokenized = self.tokenizer(
 			input_text,
 			truncation=True,
@@ -102,10 +137,12 @@ class ExInClassifierDNABERT(BaseModel):
 		).to(self.model.device)
 
 		input_ids = tokenized["input_ids"]
+		input_ids = cast(torch.Tensor, input_ids)
 		attention_mask = tokenized["attention_mask"]
+		attention_mask = cast(torch.Tensor, attention_mask)
 
 		return (input_ids, attention_mask)
-	
+
 	def _tokenize_for_training(
 		self,
 		sentence: str,
@@ -131,28 +168,48 @@ class ExInClassifierDNABERT(BaseModel):
 		tokenized = []
 
 		for data in tqdm(dataset):
-			sentence, target = self._build_input(
-				sequence=data["sequence"],
-				target=data.get("target")
-			)
+			sequence = data["sequence"]
+			target = data.get("target")
 
 			if target is None:
-				raise ValueError("Target is missing.")
-			
-			tokenized_input = self._tokenize_for_training(
-				sentence=sentence,
-				target=target
-			)
+				raise MissingEssentialProp("Target missing")
 
-			input_ids, attention_mask, labels = tokenized_input
-			tokenized.append({
-				"input_ids": input_ids,
-				"attention_mask": attention_mask,
-				"labels": labels
-			})
+			indices = list(range(len(sequence)))
+			random.shuffle(indices)
+
+			for i in indices:
+				cropped_target = target[i]
+
+				flank_start = max(i - self.flank_size, 0)
+				flank_end = min(i + self.flank_size, len(sequence))
+				
+				flank_before = sequence[flank_start:i]
+				flank_after = sequence[i+1:flank_end]
+				
+				sentence, label_id = self._build_input(
+					sequence=sequence[i],
+					flank_before=flank_before,
+					flank_after=flank_after,
+					target=cropped_target
+				)
+
+				assert label_id is not None
+
+				input_ids, attention_mask, labels = self._tokenize_for_training(
+					sentence=sentence,
+					target=label_id
+				)
+
+				sample = {
+					"input_ids": input_ids,
+					"attention_mask": attention_mask,
+					"labels": labels
+				}
+
+				tokenized.append(sample)
 
 		return Dataset.from_list(tokenized)
-		
+
 	def train(
 		self,
 		dataset: list[Input],
@@ -165,6 +222,8 @@ class ExInClassifierDNABERT(BaseModel):
 		data = self._prepare_dataset(dataset)
 		self._log("Dataset prepared!")
 
+		self._log(f"Dataset length: {len(data)}")
+		
 		args = TrainingArguments(
 			num_train_epochs=params.epochs,
 			optim=params.optim,
@@ -178,12 +237,12 @@ class ExInClassifierDNABERT(BaseModel):
 
 		if self.seed:
 			args.seed = self.seed
-
+		
 		trainer = Trainer(
 			model=self.model,
 			train_dataset=data,
 			args=args,
-			data_collator=DataCollatorWithPadding(self.tokenizer),
+			data_collator=DataCollatorWithPadding(self.tokenizer)
 		)
 
 		self._log("Starting training...")
@@ -194,22 +253,40 @@ class ExInClassifierDNABERT(BaseModel):
 
 	def generate(
 		self,
-		input: GenerateInput
+		data: Input
 	) -> str:
 		if self.model is None or self.tokenizer is None:
 			raise MissingEssentialProp("Model or Tokenizer missing.")
 		
-		sentence, _ = self._build_input(
-			sequence=input["sequence"]
-		)
-
-		input_ids, _ = self._tokenize(sentence)
-
 		self.model.eval()
-		with torch.no_grad():
-			outputs = self.model(
-				input_ids=input_ids
-			)
-			pred_id = torch.argmax(outputs.logits, dim=-1).item()
+
+		sequence = data["sequence"]
+
+		predicted = ""
 		
-		return self._unprocess_target(int(pred_id))
+		with torch.no_grad():
+			for i, nucl in enumerate(sequence):	
+				flank_start = max(i - self.flank_size, 0)
+				flank_end = min(i + self.flank_size, len(sequence))
+				
+				flank_before = sequence[flank_start:i]
+				flank_after = sequence[i+1:flank_end]
+
+				sentence, _ = self._build_input(
+					sequence=nucl,
+					flank_before=flank_before,
+					flank_after=flank_after
+				)
+
+				tokenized_input = self._tokenize(sentence)
+
+				input_ids, _ = tokenized_input
+
+				outputs = self.model(
+					input_ids=input_ids
+				)
+				pred_id = torch.argmax(outputs.logits, dim=-1).item()
+
+				predicted += self._unprocess_target(int(pred_id))
+
+			return predicted
