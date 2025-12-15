@@ -3,12 +3,11 @@ from typing import TypedDict, cast
 
 import torch
 from datasets import Dataset
+from llms.base import BaseModel
+from schemas.train_params import TrainParams
 from tqdm import tqdm
 from transformers import (BertForSequenceClassification, BertTokenizer,
                           DataCollatorWithPadding, Trainer, TrainingArguments)
-
-from llms.base import BaseModel
-from schemas.train_params import TrainParams
 from utils.exceptions import MissingEssentialProp
 
 
@@ -48,6 +47,7 @@ class NuclBERT(BaseModel):
 		seed: int | None = None,
 		max_length: int = 512,
 		flank_size: int = 24,
+		from_pretrained: bool = False
 	) -> None:
 		self.max_length = max_length
 		self.flank_size = flank_size
@@ -55,7 +55,8 @@ class NuclBERT(BaseModel):
 		super().__init__(
 			checkpoint=checkpoint,
 			log_level=log_level,
-			seed=seed
+			seed=seed,
+			from_pretrained=from_pretrained
 		)	
 	
 	def load_checkpoint(

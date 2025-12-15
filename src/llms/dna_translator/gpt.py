@@ -184,15 +184,22 @@ class DNATranslatorGPT(BaseModel):
 
 	def train(
 		self,
-		dataset: list[Input],
-		params: TrainParams
+		train_dataset: list[Input],
+		params: TrainParams,
+		eval_dataset: list[Input] | None = None
 	) -> None:
 		if not self.model or not self.tokenizer:
 			raise MissingEssentialProp("Model or Tokenizer missing.")
 		
-		self._log("Preparing dataset...")
-		data = self._prepare_dataset(dataset)
-		self._log("Dataset prepared!")
+		self._log("Preparing train dataset...")
+		train_data = self._prepare_dataset(train_dataset)
+		self._log("Train dataset prepared!")
+
+		eval_data = None
+		if eval_dataset:
+			self._log("Preparing eval dataset...")
+			eval_data = self._prepare_dataset(eval_dataset)
+			self._log("Eval dataset prepared!")
 
 		args = TrainingArguments(
 			num_train_epochs=params.epochs,
@@ -202,15 +209,19 @@ class DNATranslatorGPT(BaseModel):
 			gradient_accumulation_steps=params.gradient_accumulation,
 			lr_scheduler_type="cosine",
 			save_strategy="no",
-			logging_steps=params.logging_steps,
+			logging_steps=params.logging_steps
 		)
+
+		if eval_data:
+			args.eval_strategy = "epoch"
 
 		if self.seed:
 			args.seed = self.seed
 
 		trainer = Trainer(
 			model=self.model,
-			train_dataset=data,
+			train_dataset=train_data,
+			eval_dataset=eval_data,
 			args=args,
 			data_collator=DataCollatorForFT(self.tokenizer),
 		)

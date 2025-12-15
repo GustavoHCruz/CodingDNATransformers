@@ -29,7 +29,8 @@ class NuclDNABERT(BaseModel):
 		log_level="INFO",
 		seed: int | None = None,
 		max_length: int = 512,
-		flank_size: int = 24
+		flank_size: int = 24,
+		from_pretrained: bool = False
 	) -> None:
 		self.max_length = max_length
 		self.flank_size = flank_size
@@ -37,7 +38,8 @@ class NuclDNABERT(BaseModel):
 		super().__init__(
 			checkpoint=checkpoint,
 			log_level=log_level,
-			seed=seed
+			seed=seed,
+			from_pretrained=from_pretrained
 		)	
 	
 	def load_checkpoint(

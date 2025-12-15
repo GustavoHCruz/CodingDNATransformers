@@ -19,7 +19,8 @@ class BaseModel(ABC):
 		self,
 		checkpoint: str | None = None,
 		log_level = "INFO",
-		seed: int | None = None
+		seed: int | None = None,
+		from_pretrained: bool = False
 	) -> None:
 		if seed:
 			self._set_seed(seed)
@@ -30,9 +31,15 @@ class BaseModel(ABC):
 		
 		if checkpoint:
 			self._checkpoint = checkpoint
-			self.load_checkpoint(
-				checkpoint=checkpoint
-			)
+
+			if from_pretrained:
+				self.from_pretrained(
+					checkpoint=checkpoint
+				)
+			else:
+				self.load_checkpoint(
+					checkpoint=checkpoint
+				)
 	
 	def _set_seed(
 		self,
