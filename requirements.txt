@@ -3,7 +3,7 @@ torch==2.8.0
 torchvision==0.23.0
 
 accelerate==1.10.1
-biopython==1.85
+biopython==1.86
 colorama==0.4.6
 datasets==4.2.0
 editdistance==0.8.1
