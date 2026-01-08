@@ -1,5 +1,5 @@
 import re
-from typing import TypedDict, cast
+from typing import TypedDict
 
 import torch
 from datasets import Dataset
@@ -7,9 +7,9 @@ from llms.base import BaseModel
 from schemas.train_params import TrainParams
 from torch import Tensor
 from tqdm import tqdm
+from transformers import TrainingArguments
 from transformers.models.gpt2 import GPT2LMHeadModel, GPT2Tokenizer
 from transformers.trainer import Trainer
-from transformers.training_args import TrainingArguments
 from utils.data_collators import DataCollatorForFT
 from utils.exceptions import MissingEssentialProp
 
@@ -137,24 +137,37 @@ class DNATranslatorGPT(BaseModel):
 		self,
 		input_text: str,
 		expected_text: str
-	) -> tuple[Tensor, Tensor, Tensor]:
+) -> tuple[Tensor, Tensor, Tensor, list[int], list[int]]:
 		if self.model is None or self.tokenizer is None:
 			raise MissingEssentialProp("Model or Tokenizer missing.")
-		
-		encoded_input = self.tokenizer(input_text)
-		only_inputs = encoded_input["input_ids"]
-		assert isinstance(only_inputs, list)
 
-		encoded = self.tokenizer(input_text + expected_text)
+		encoded_prompt = self.tokenizer.encode(
+			input_text,
+			truncation=True,
+			max_length=self.max_length,
+			return_attention_mask=True
+		)
+			
+		prompt_input_ids = encoded_prompt
+		prompt_attention_mask = [1] * len(prompt_input_ids)
 
-		input_ids = torch.tensor(encoded["input_ids"])
-		attention_mask = torch.tensor(encoded["attention_mask"])
+		encoded_full = self.tokenizer((input_text + expected_text), truncation=True, max_length=self.max_length)
+		full_input_ids = encoded_full["input_ids"]
+		full_attention_mask = encoded_full["attention_mask"]
+
+		input_ids = torch.tensor(full_input_ids)
+		attention_mask = torch.tensor(full_attention_mask)
 
 		labels = input_ids.clone()
+		labels[:len(prompt_input_ids)] = -100
 
-		labels[:len(only_inputs)] = -100
-		
-		return input_ids, attention_mask, labels
+		return (
+			input_ids,
+			attention_mask,
+			labels,
+			prompt_input_ids,
+			prompt_attention_mask
+		)
 
 	def _prepare_dataset(
 		self,
@@ -173,11 +186,13 @@ class DNATranslatorGPT(BaseModel):
 				expected_text=output_sequence
 			)
 
-			input_ids, attention_mask, labels = tokenized_input
+			input_ids, attention_mask, labels, prompt_input_ids, prompt_attention_mask = tokenized_input
 			tokenized.append({
 				"input_ids": input_ids,
 				"attention_mask": attention_mask,
-				"labels": labels
+				"labels": labels,
+				"prompt_input_ids": prompt_input_ids,
+				"prompt_attention_mask": prompt_attention_mask
 			})
 
 		return Dataset.from_list(tokenized)
@@ -192,38 +207,42 @@ class DNATranslatorGPT(BaseModel):
 			raise MissingEssentialProp("Model or Tokenizer missing.")
 		
 		self._log("Preparing train dataset...")
-		train_data = self._prepare_dataset(train_dataset)
+		train_dataset_processed = self._prepare_dataset(train_dataset)
 		self._log("Train dataset prepared!")
 
-		eval_data = None
+		eval_dataset_processed = None
 		if eval_dataset:
 			self._log("Preparing eval dataset...")
-			eval_data = self._prepare_dataset(eval_dataset)
+			eval_dataset_processed = self._prepare_dataset(eval_dataset)
 			self._log("Eval dataset prepared!")
 
 		args = TrainingArguments(
+			save_strategy="no",
 			num_train_epochs=params.epochs,
 			optim=params.optim,
 			learning_rate=params.lr,
 			per_device_train_batch_size=params.batch_size,
 			gradient_accumulation_steps=params.gradient_accumulation,
-			lr_scheduler_type="cosine",
-			save_strategy="no",
 			logging_steps=params.logging_steps
 		)
 
-		if eval_data:
+		if params.warmup_ratio:
+			args.lr_scheduler_type = "linear"
+			args.warmup_ratio = params.warmup_ratio
+
+		if eval_dataset_processed:
 			args.eval_strategy = "epoch"
 
 		if self.seed:
 			args.seed = self.seed
 
+
 		trainer = Trainer(
 			model=self.model,
-			train_dataset=train_data,
-			eval_dataset=eval_data,
+			train_dataset=train_dataset_processed,
+			eval_dataset=eval_dataset_processed,
 			args=args,
-			data_collator=DataCollatorForFT(self.tokenizer),
+			data_collator=DataCollatorForFT(self.tokenizer)
 		)
 
 		self._log("Starting training...")
