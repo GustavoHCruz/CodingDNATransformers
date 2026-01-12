@@ -3,13 +3,14 @@ from typing import TypedDict
 
 import torch
 from datasets import Dataset
-from llms.base import BaseModel
-from schemas.train_params import TrainParams
 from torch import Tensor
 from tqdm import tqdm
 from transformers import TrainingArguments
 from transformers.models.gpt2 import GPT2LMHeadModel, GPT2Tokenizer
 from transformers.trainer import Trainer
+
+from llms.base import BaseModel
+from schemas.train_params import TrainParams
 from utils.data_collators import DataCollatorForFT
 from utils.exceptions import MissingEssentialProp
 
@@ -169,7 +170,7 @@ class DNATranslatorGPT(BaseModel):
 			prompt_attention_mask
 		)
 
-	def _prepare_dataset(
+	def prepare_dataset(
 		self,
 		dataset: list[Input]
 	) -> Dataset:
@@ -199,21 +200,25 @@ class DNATranslatorGPT(BaseModel):
 
 	def train(
 		self,
-		train_dataset: list[Input],
+		train_dataset: list[Input] | Dataset,
 		params: TrainParams,
-		eval_dataset: list[Input] | None = None
+		eval_dataset: list[Input] | Dataset | None = None
 	) -> None:
 		if not self.model or not self.tokenizer:
 			raise MissingEssentialProp("Model or Tokenizer missing.")
 		
 		self._log("Preparing train dataset...")
-		train_dataset_processed = self._prepare_dataset(train_dataset)
+		if isinstance(train_dataset, list):
+			train_dataset_processed = self.prepare_dataset(train_dataset)
+		else:
+			train_dataset_processed = train_dataset
 		self._log("Train dataset prepared!")
 
 		eval_dataset_processed = None
 		if eval_dataset:
 			self._log("Preparing eval dataset...")
-			eval_dataset_processed = self._prepare_dataset(eval_dataset)
+			if isinstance(eval_dataset, list):
+				eval_dataset_processed = self.prepare_dataset(eval_dataset)
 			self._log("Eval dataset prepared!")
 
 		args = TrainingArguments(
@@ -235,7 +240,6 @@ class DNATranslatorGPT(BaseModel):
 
 		if self.seed:
 			args.seed = self.seed
-
 
 		trainer = Trainer(
 			model=self.model,
