@@ -27,7 +27,7 @@ Each following section describes the models, expected input/output format, and e
 The model receives an entire DNA sequence and classifies it as **coding (exon)** or **non-coding (intron)**.  
 Additional metadata (organism, gene name, flanking regions) can be included probabilistically to enrich the context.
 
-- **Models used:** [GPT-2](https://huggingface.co/openai-community/gpt2), [BERT](https://huggingface.co/google-bert/bert-base-uncased), [DNABERT2](https://huggingface.co/zhihan1996/DNABERT-2-117M), [T5](https://huggingface.co/google-t5/t5-base)
+- **Models used:** [GPT-2](https://huggingface.co/openai-community/gpt2), [BERT](https://huggingface.co/google-bert/bert-base-uncased), [DNABERT-2](https://huggingface.co/zhihan1996/DNABERT-2-117M), [T5](https://huggingface.co/google-t5/t5-base)
 
 #### Input/Output Format (GPT and BERT)
 
